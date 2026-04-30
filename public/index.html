@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>NQ/MNQ · Gamma Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#08080d;--bg2:#0c0c13;--bg3:#101018;
+  --border:#1a1a26;--border2:#141420;
+  --text:#c8c8d8;--dim:#555;
+  --green:#00dd77;--red:#ff3d3d;--blue:#4499ff;
+  --pink:#ff4488;--yellow:#ffdd00;--purple:#8888ff;
+  --orange:#ff6633;--teal:#00aa66;
+  --vanna:#ff9944;--charm:#bb44ff;
+  --mono:'IBM Plex Mono','Courier New',monospace;
+  --disp:'Space Grotesk',sans-serif;
+}
+html,body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:100vh;}
+::-webkit-scrollbar{width:3px;height:3px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:#2a2a3a;border-radius:2px}
+.app{max-width:1600px;margin:0 auto;padding:20px;}
+
+/* Header */
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;flex-wrap:wrap;gap:12px;}
+.hdr-l .eye{font-size:9px;letter-spacing:4px;color:#333;margin-bottom:4px;}
+.hdr-l .ttl{font-family:var(--disp);font-size:28px;font-weight:700;letter-spacing:-1px;}
+.hdr-l .ttl span{color:#252530;font-weight:400;}
+.hdr-r{text-align:right;}
+.hdr-r .qqq{font-family:var(--disp);font-size:13px;color:var(--dim);}
+.hdr-r .nqp{font-family:var(--disp);font-size:24px;font-weight:700;}
+.hdr-r .upd{font-size:8px;color:#252530;margin-top:2px;}
+.live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:6px;animation:pulse 2s infinite;vertical-align:middle;}
+
+/* Banners */
+.bnr{border-radius:4px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;}
+.bnr-closed{border:1px solid #2a2600;background:rgba(255,190,0,0.03);}
+.bnr-closed .bt{font-size:10px;color:#aa8800;letter-spacing:2px;margin-bottom:3px;}
+.bnr-closed .bm{font-size:9px;color:#554400;line-height:1.7;}
+.bnr-regime{border:1px solid;}
+.bnr-regime.neg{border-color:#ff3a3a33;background:rgba(255,40,40,0.04);}
+.bnr-regime.pos{border-color:#00dd7722;background:rgba(0,220,100,0.03);}
+.rdot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px;animation:pulse 2s infinite;}
+.rlbl{font-size:12px;font-weight:600;letter-spacing:2px;}
+.rsub{font-size:8px;color:#444;margin-top:2px;}
+.rflip{text-align:right;margin-left:auto;}
+.rflip .fl{font-size:8px;color:#333;letter-spacing:1px;}
+.rflip .fv{font-family:var(--disp);font-size:20px;font-weight:700;color:#888;}
+.rflip .fn{font-size:9px;color:#555;}
+.rflip .fd{font-size:9px;}
+
+/* Key Levels */
+.walls{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:8px;margin-bottom:14px;}
+.wcard{background:var(--bg2);border:1px solid var(--border2);border-radius:4px;padding:10px 12px;}
+.wcard .wl{font-size:8px;letter-spacing:2px;color:#333;margin-bottom:5px;}
+.wcard .ws{font-family:var(--disp);font-size:17px;font-weight:700;}
+.wcard .wn{font-size:9px;color:#444;margin-top:1px;}
+.wcard .wv{font-size:8px;margin-top:3px;color:#444;}
+.wcard.cwall{border-top:2px solid rgba(255,61,61,0.35);}
+.wcard.pwall{border-top:2px solid rgba(0,221,119,0.35);}
+.wcard.cvwall{border-top:2px solid rgba(255,102,51,0.35);}
+.wcard.pvwall{border-top:2px solid rgba(0,170,102,0.35);}
+.wcard.gflip{border-top:2px solid rgba(136,136,255,0.35);}
+.wcard.dexb{border-top:2px solid rgba(68,153,255,0.35);}
+
+/* Exposure totals */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px;}
+@media(max-width:700px){.stats{grid-template-columns:repeat(2,1fr)}}
+.scard{background:var(--bg2);border:1px solid var(--border2);border-radius:4px;padding:10px 12px;}
+.scard .sl{font-size:8px;letter-spacing:2px;color:#333;margin-bottom:5px;}
+.scard .sv{font-family:var(--disp);font-size:19px;font-weight:700;}
+.scard .ss{font-size:8px;margin-top:2px;}
+
+/* Expiry filter */
+.ctrl{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;}
+.ebtn{background:transparent;border:1px solid #141414;color:#333;border-radius:3px;padding:3px 8px;font-size:8px;letter-spacing:1px;cursor:pointer;font-family:var(--mono);transition:all .1s;}
+.ebtn.on{background:#161622;border-color:#2a2a3a;color:#888;}
+
+/* Greek section */
+.gsec{margin-bottom:22px;}
+.ghdr{display:flex;align-items:center;gap:10px;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border2);}
+.ghdr .glbl{font-size:10px;letter-spacing:3px;font-weight:600;}
+.ghdr .gnet{font-family:var(--disp);font-size:14px;font-weight:700;margin-left:auto;}
+.ghdr .gsub{font-size:8px;color:#444;margin-left:6px;}
+.sort-grp{display:flex;gap:0;border:1px solid var(--border);border-radius:3px;overflow:hidden;margin-left:8px;}
+.sbtn{background:transparent;border:none;border-right:1px solid var(--border);color:#333;padding:3px 9px;font-size:9px;letter-spacing:1px;cursor:pointer;font-family:var(--mono);transition:all .1s;}
+.sbtn:last-child{border-right:none;}
+.sbtn.on{background:#161622;color:#888;}
+
+/* Chart panels */
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:6px;}
+@media(max-width:960px){.charts{grid-template-columns:1fr}}
+.cpanel{background:var(--bg2);border:1px solid var(--border2);border-radius:4px;padding:12px 0;}
+.ctitle{padding:0 14px 8px;font-size:8px;color:#333;letter-spacing:2px;display:flex;justify-content:space-between;align-items:center;padding-right:14px;}
+.cscroll{overflow-y:auto;max-height:340px;}
+
+/* Diverging bar rows */
+.srow{display:grid;grid-template-columns:100px 1fr 82px;align-items:center;padding:2px 10px;gap:6px;border-left:2px solid transparent;transition:background .1s;}
+.srow:hover{background:rgba(255,255,255,0.02)}
+.slbl{font-size:10px;color:var(--dim);text-align:right;white-space:nowrap;}
+.tag{font-size:7px;margin-right:3px;padding:1px 3px;border-radius:2px;display:inline-block;}
+.t-atm{color:var(--yellow);background:rgba(255,220,0,.12);}
+.t-flip{color:var(--purple);background:rgba(136,136,255,.1);}
+.t-cw{color:var(--red);background:rgba(255,61,61,.1);}
+.t-pw{color:var(--green);background:rgba(0,221,119,.1);}
+.t-cv{color:var(--orange);background:rgba(255,102,51,.1);}
+.t-pv{color:var(--teal);background:rgba(0,170,102,.1);}
+
+/* Diverging bar — center zero */
+.dbw{position:relative;height:20px;display:flex;align-items:center;}
+.dzero{position:absolute;left:50%;width:1px;height:100%;background:rgba(255,255,255,0.07);z-index:1;}
+.dp{position:absolute;left:50%;height:11px;border-radius:0 2px 2px 0;transition:width .35s;}
+.dn{position:absolute;height:11px;border-radius:2px 0 0 2px;transition:width .35s;right:50%;}
+.dvp{position:absolute;left:50%;height:5px;border-radius:0 1px 1px 0;bottom:1px;transition:width .35s;}
+.dvn{position:absolute;height:5px;border-radius:1px 0 0 1px;bottom:1px;transition:width .35s;right:50%;}
+.bval{font-size:9px;text-align:right;}
+
+/* Zone row backgrounds — intensity scaled */
+.zn1{background:rgba(255,61,61,0.04);}
+.zn2{background:rgba(255,61,61,0.09);}
+.zn3{background:rgba(255,61,61,0.16);}
+.zp1{background:rgba(0,221,119,0.04);}
+.zp2{background:rgba(0,221,119,0.09);}
+.zp3{background:rgba(0,221,119,0.16);}
+
+/* Vol rows */
+.vrow{display:grid;grid-template-columns:100px 1fr 82px;align-items:center;padding:2px 10px;gap:6px;}
+.vbw{height:11px;}
+.vb{height:100%;min-width:1px;border-radius:1px;transition:width .35s;}
+
+.cleg{padding:8px 14px 0;display:flex;gap:12px;font-size:7px;color:#252530;flex-wrap:wrap;}
+.sec-div{font-size:8px;color:#222;letter-spacing:3px;margin:14px 0 10px;}
+.errbox{background:rgba(255,40,40,.05);border:1px solid #ff333322;border-radius:4px;padding:12px;color:#ff4444;font-size:10px;margin-bottom:14px;}
+.ldmsg{text-align:center;color:#222;padding:50px;font-size:10px;letter-spacing:3px;}
+.bbar{display:flex;justify-content:space-between;align-items:center;margin:14px 0 18px;flex-wrap:wrap;gap:10px;}
+.rfbtn{background:transparent;border:1px solid #1a1a1a;color:#555;border-radius:3px;padding:6px 18px;font-size:9px;letter-spacing:2px;cursor:pointer;font-family:var(--mono);}
+.rfbtn:hover{border-color:#333;color:#888;}
+.rfbtn:disabled{color:#222;border-color:#111;cursor:default;}
+.albl{font-size:7px;color:#1e1e1e;}
+.legend{padding:12px 14px;background:var(--bg2);border:1px solid #121212;border-radius:4px;}
+.ltitle{font-size:7px;color:#2a2a2a;letter-spacing:2px;margin-bottom:8px;}
+.lgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:2px;}
+.lrow{font-size:8px;color:#383838;line-height:2.2;}
+
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── OI BAR PULSE ANIMATIONS ── */
+@keyframes oi-pulse-slow{0%,100%{opacity:1;filter:brightness(1)}50%{opacity:.55;filter:brightness(.7)}}
+@keyframes oi-pulse-med {0%,100%{opacity:1;filter:brightness(1)}50%{opacity:.5; filter:brightness(.65)}}
+@keyframes oi-pulse-fast{0%,100%{opacity:1;filter:brightness(1)}50%{opacity:.45;filter:brightness(.6)}}
+.oi-pulse-slow .dp,.oi-pulse-slow .dn{animation:oi-pulse-slow 3s ease-in-out infinite;}
+.oi-pulse-med  .dp,.oi-pulse-med  .dn{animation:oi-pulse-med  1.8s ease-in-out infinite;}
+.oi-pulse-fast .dp,.oi-pulse-fast .dn{animation:oi-pulse-fast 1s ease-in-out infinite;}
+
+/* ── VOL BAR SHIMMER ANIMATIONS ── */
+@keyframes shimmer-slow{
+  0%  {background-position:-200% center;}
+  100%{background-position: 300% center;}
+}
+@keyframes shimmer-med{
+  0%  {background-position:-200% center;}
+  100%{background-position: 300% center;}
+}
+@keyframes shimmer-fast{
+  0%  {background-position:-200% center;}
+  100%{background-position: 300% center;}
+}
+/* Applied to .vb elements — shimmer is a moving highlight stripe */
+.vol-shimmer-slow .vb{
+  background-image:linear-gradient(90deg, transparent 0%, transparent 35%, rgba(255,255,255,0.35) 50%, transparent 65%, transparent 100%) !important;
+  background-size:200% 100%;
+  animation:shimmer-slow 3.5s linear infinite;
+}
+.vol-shimmer-med .vb{
+  background-image:linear-gradient(90deg, transparent 0%, transparent 35%, rgba(255,255,255,0.35) 50%, transparent 65%, transparent 100%) !important;
+  background-size:200% 100%;
+  animation:shimmer-med 2s linear infinite;
+}
+.vol-shimmer-fast .vb{
+  background-image:linear-gradient(90deg, transparent 0%, transparent 35%, rgba(255,255,255,0.38) 50%, transparent 65%, transparent 100%) !important;
+  background-size:200% 100%;
+  animation:shimmer-fast 1s linear infinite;
+}
+/* On-refresh flash — added via JS class then removed */
+@keyframes shimmer-flash{
+  0%  {background-position:-200% center;}
+  100%{background-position: 300% center;}
+}
+.vol-flash .vb{
+  background-image:linear-gradient(90deg, transparent 0%, transparent 30%, rgba(255,255,255,0.5) 50%, transparent 70%, transparent 100%) !important;
+  background-size:200% 100%;
+  animation:shimmer-flash 0.6s linear forwards;
+}
+
+/* Animation controls panel */
+.anim-panel{display:flex;gap:12px;flex-wrap:wrap;align-items:center;padding:8px 12px;background:var(--bg2);border:1px solid var(--border2);border-radius:4px;margin-bottom:14px;}
+.anim-group{display:flex;align-items:center;gap:6px;font-size:9px;color:#444;}
+.anim-group label{letter-spacing:1px;white-space:nowrap;}
+.anim-sel{background:var(--bg3);border:1px solid var(--border2);color:#666;border-radius:3px;padding:2px 6px;font-size:9px;font-family:var(--mono);cursor:pointer;}
+.anim-sel:focus{outline:none;border-color:#333;}
+
+/* Timeline charts */
+.tl-section{margin-bottom:20px;}
+.tl-header{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;}
+.tl-header .tl-title{font-size:9px;letter-spacing:3px;color:#333;}
+.tl-header .tl-toggle{display:flex;border:1px solid var(--border);border-radius:3px;overflow:hidden;}
+.tl-header .tl-toggle button{background:transparent;border:none;border-right:1px solid var(--border);color:#333;padding:3px 10px;font-size:9px;letter-spacing:1px;cursor:pointer;font-family:var(--mono);}
+.tl-header .tl-toggle button:last-child{border-right:none;}
+.tl-header .tl-toggle button.on{background:#161622;color:#888;}
+.tl-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px;}
+@media(max-width:900px){.tl-grid{grid-template-columns:1fr;}}
+.tl-chart{background:var(--bg2);border:1px solid var(--border2);border-radius:4px;padding:10px 12px 6px;}
+.tl-chart-title{font-size:8px;color:#333;letter-spacing:2px;margin-bottom:6px;display:flex;justify-content:space-between;}
+.tl-canvas-wrap{position:relative;height:100px;width:100%;}
+.tl-canvas-wrap canvas{width:100%!important;height:100%!important;}
+.tl-slider-wrap{padding:4px 0 0;}
+.tl-slider{width:100%;accent-color:#333;height:2px;cursor:pointer;}
+.tl-net{font-size:10px;font-weight:600;}
+
+/* 0DTE Split */
+.dte-section{margin-bottom:20px;}
+.dte-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+@media(max-width:900px){.dte-grid{grid-template-columns:1fr;}}
+.dte-panel{background:var(--bg2);border:1px solid var(--border2);border-radius:4px;padding:10px 0;}
+.dte-title{padding:0 14px 8px;font-size:8px;color:#333;letter-spacing:2px;}
+.dte-scroll{overflow-y:auto;max-height:220px;}
+.dte-row{display:grid;grid-template-columns:80px 1fr 70px 60px;align-items:center;padding:2px 10px;gap:6px;font-size:9px;}
+.dte-row:hover{background:rgba(255,255,255,0.02);}
+.dte-strike{color:var(--dim);text-align:right;}
+.dte-bar-wrap{height:8px;}
+.dte-bar{height:100%;border-radius:1px;transition:width .3s;}
+.dte-val{text-align:right;}
+.dte-pcr{text-align:right;color:#444;}
+
+/* DEX/GEX ratio */
+.ratio-section{margin-bottom:14px;}
+.ratio-bar{height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;position:relative;}
+.ratio-fill{height:100%;border-radius:3px;transition:width .3s;}
+.ratio-label{display:flex;justify-content:space-between;font-size:8px;color:#333;margin-top:3px;}
+</style>
+</head>
+<body>
+<div class="app" id="root"><div class="ldmsg">INITIALIZING NQ GAMMA TRACKER...</div></div>
+<script>
+const BASE="/api/options";
+const SESSION_API="/api/session";
+
+const S={
+  spot:null,nqSpot:null,mult:40.5,
+  strikes:[],flip:null,regime:null,
+  gexOI:0,gexVol:0,dexOI:0,dexVol:0,
+  vannaOI:0,vannaVol:0,charmOI:0,charmVol:0,
+  exps:[],selExp:"all",
+  volSort:{GEX:"strike",DEX:"strike",VANNA:"strike",CHARM:"strike"},
+  loading:false,error:null,updated:null,
+  mkt:mktStatus(),
+  // Timeline — full session history
+  timeline:[],          // array of {ts, gexOI, gexVol, dexOI, dexVol, flip, regime}
+  tlChartType:"line",   // line | bar
+  tlWindow:120,         // visible points
+  tlOffset:0,           // scroll offset from right
+  sessionLoaded:false,
+  // 0DTE split
+  dte0strikes:[],
+  weeklyStrikes:[],
+  show0DTE:true,
+  callOIWall:null,putOIWall:null,callVolWall:null,putVolWall:null,
+  // EOD snapshot
+  eod:null,eodLoaded:false,
+  // Animation settings
+  oiPulse:"slow",   // off | slow | med | fast
+  volShimmer:"med", // off | slow | med | fast
+  volFlash:true,    // flash on each refresh
+};
+
+function fmt(n,d=2){
+  if(!isFinite(n)||n===null)return"—";
+  const a=Math.abs(n);
+  if(a>=1e9)return(n/1e9).toFixed(1)+"B";
+  if(a>=1e6)return(n/1e6).toFixed(1)+"M";
+  if(a>=1e3)return(n/1e3).toFixed(1)+"K";
+  return n.toFixed(d);
+}
+function nq(q){return q?Math.round(q*S.mult):"—";}
+
+function mktStatus(){
+  const et=new Date(new Date().toLocaleString("en-US",{timeZone:"America/New_York"}));
+  const d=et.getDay(),h=et.getHours(),m=et.getMinutes(),mins=h*60+m;
+  if(d===0||d===6)return{open:false,msg:"Weekend — market returns 9:30 AM ET Monday."};
+  if(mins<570){const w=570-mins;return{open:false,msg:`Pre-market. Opens in ${Math.floor(w/60)}h ${w%60}m at 9:30 AM ET.`};}
+  if(mins>=960)return{open:false,msg:"After hours. Data available at next open 9:30 AM ET."};
+  return{open:true,msg:"RTH open"};
+}
+
+function process(spot,contracts){
+  const map={};
+  for(const c of contracts){
+    const strike=c.details?.strike_price;
+    const type=c.details?.contract_type;
+    const gamma=c.greeks?.gamma;
+    const delta=c.greeks?.delta;
+    const vega=c.greeks?.vega;
+    const theta=c.greeks?.theta;
+    const oi=c.open_interest||0;
+    const vol=c.day?.volume||0;
+    if(!strike||!type)continue;
+    if(!map[strike])map[strike]={
+      strike,
+      callOI:0,putOI:0,callVol:0,putVol:0,
+      callGex:0,putGex:0,callVGex:0,putVGex:0,
+      callDex:0,putDex:0,callVDex:0,putVDex:0,
+      callVanna:0,putVanna:0,callVVanna:0,putVVanna:0,
+      callCharm:0,putCharm:0,callVCharm:0,putVCharm:0,
+    };
+    if(type==="call"){map[strike].callOI+=oi;map[strike].callVol+=vol;}
+    else{map[strike].putOI+=oi;map[strike].putVol+=vol;}
+    if(gamma&&oi){
+      const g=gamma*oi*100*spot*spot/100;
+      const gv=gamma*vol*100*spot*spot/100;
+      if(type==="call"){map[strike].callGex+=g;map[strike].callVGex+=gv;}
+      else{map[strike].putGex-=g;map[strike].putVGex-=gv;}
+    }
+    if(delta!=null&&oi){
+      const d2=delta*oi*100,dv=delta*vol*100;
+      if(type==="call"){map[strike].callDex+=d2;map[strike].callVDex+=dv;}
+      else{map[strike].putDex+=d2;map[strike].putVDex+=dv;}
+    }
+    // Vanna ≈ vega exposure scaled by OI (vol-driven delta flow)
+    if(vega&&oi){
+      const va=vega*oi*100,vav=vega*vol*100;
+      if(type==="call"){map[strike].callVanna+=va;map[strike].callVVanna+=vav;}
+      else{map[strike].putVanna-=va;map[strike].putVVanna-=vav;}
+    }
+    // Charm ≈ theta × delta × OI (time-decay directional pressure)
+    if(theta&&delta&&oi){
+      const ch=theta*delta*oi*100,chv=theta*delta*vol*100;
+      if(type==="call"){map[strike].callCharm+=ch;map[strike].callVCharm+=chv;}
+      else{map[strike].putCharm+=ch;map[strike].putVCharm+=chv;}
+    }
+  }
+
+  const rows=Object.values(map)
+    .filter(s=>s.strike>=spot*.85&&s.strike<=spot*1.15)
+    .sort((a,b)=>a.strike-b.strike)
+    .map(s=>({...s,
+      netGex:s.callGex+s.putGex,netVGex:s.callVGex+s.putVGex,
+      netDex:s.callDex+s.putDex,netVDex:s.callVDex+s.putVDex,
+      netVanna:s.callVanna+s.putVanna,netVVanna:s.callVVanna+s.putVVanna,
+      netCharm:s.callCharm+s.putCharm,netVCharm:s.callVCharm+s.putVCharm,
+    }));
+
+  // Gamma flip
+  const ai=rows.reduce((b,s,i)=>Math.abs(s.strike-spot)<Math.abs(rows[b].strike-spot)?i:b,0);
+  let flip=null,cum=0;
+  for(let i=ai;i<rows.length;i++){
+    cum+=rows[i].netGex;
+    if(i>ai&&Math.sign(cum)!==Math.sign(rows[ai].netGex)){flip=(rows[i-1].strike+rows[i].strike)/2;break;}
+  }
+  if(!flip){
+    cum=0;
+    for(let i=ai;i>=0;i--){
+      cum+=rows[i].netGex;
+      if(i<ai&&Math.sign(cum)!==Math.sign(rows[ai].netGex)){flip=(rows[i].strike+rows[i+1].strike)/2;break;}
+    }
+  }
+
+  const byCOI=[...rows].sort((a,b)=>b.callOI-a.callOI);
+  const byPOI=[...rows].sort((a,b)=>b.putOI-a.putOI);
+  const byCVol=[...rows].sort((a,b)=>b.callVol-a.callVol);
+  const byPVol=[...rows].sort((a,b)=>b.putVol-a.putVol);
+
+  return{
+    rows,flip,
+    gexOI:rows.reduce((s,c)=>s+c.netGex,0),
+    gexVol:rows.reduce((s,c)=>s+c.netVGex,0),
+    dexOI:rows.reduce((s,c)=>s+c.netDex,0),
+    dexVol:rows.reduce((s,c)=>s+c.netVDex,0),
+    vannaOI:rows.reduce((s,c)=>s+c.netVanna,0),
+    vannaVol:rows.reduce((s,c)=>s+c.netVVanna,0),
+    charmOI:rows.reduce((s,c)=>s+c.netCharm,0),
+    charmVol:rows.reduce((s,c)=>s+c.netVCharm,0),
+    callOIWall:byCOI[0]||null,putOIWall:byPOI[0]||null,
+    callVolWall:byCVol[0]||null,putVolWall:byPVol[0]||null,
+  };
+}
+
+async function fetchData(){
+  S.mkt=mktStatus();
+  if(!S.mkt.open){render();return;}
+  S.loading=true;S.error=null;render();
+  try{
+    const url=`${BASE}${S.selExp!=="all"?`?exp=${S.selExp}`:""}`;
+    const res=await fetch(url);
+    if(!res.ok)throw new Error(`API error ${res.status}`);
+    const data=await res.json();
+    if(data.error)throw new Error(data.error);
+    const{spot,nqPrice,contracts}=data;
+    if(!spot)throw new Error("No spot price returned");
+    S.spot=spot;
+    // Only update mult from API if we got a real NQ futures price
+    // If null, keep last known mult (manual override or previous refresh)
+    if(data.mult&&data.mult>35&&data.mult<50){
+      S.mult=data.mult;
+      S.nqSpot=spot*data.mult;
+    } else if(nqPrice&&nqPrice>1000){
+      S.nqSpot=nqPrice;
+      S.mult=nqPrice/spot;
+    }
+    // Never reset mult to default — preserve manual override across refreshes
+    S.exps=data.expirations||[];
+    const filtered=S.selExp==="all"?contracts:contracts.filter(c=>c.details?.expiration_date===S.selExp);
+    const r=process(spot,filtered);
+    S.strikes=r.rows;S.flip=r.flip;
+    S.gexOI=r.gexOI;S.gexVol=r.gexVol;
+    S.dexOI=r.dexOI;S.dexVol=r.dexVol;
+    S.vannaOI=r.vannaOI;S.vannaVol=r.vannaVol;
+    S.charmOI=r.charmOI;S.charmVol=r.charmVol;
+    S.callOIWall=r.callOIWall;S.putOIWall=r.putOIWall;
+    S.callVolWall=r.callVolWall;S.putVolWall=r.putVolWall;
+    if(S.flip)S.regime=S.spot<S.flip?"NEGATIVE":"POSITIVE";
+    else S.regime=S.gexOI<0?"NEGATIVE":"POSITIVE";
+    S.updated=new Date();
+    // Build 0DTE vs weekly split
+    build0DTESplit(filtered,spot);
+    // Save snapshot to session timeline
+    saveSnapshot();
+  }catch(e){S.error=e.message;}
+  S.loading=false;
+  render();
+  // Trigger vol flash on refresh
+  if(S.volFlash && !S.error){
+    document.querySelectorAll('.vrow').forEach(r=>r.classList.add('vol-flash'));
+    setTimeout(()=>document.querySelectorAll('.vol-flash').forEach(r=>r.classList.remove('vol-flash')),700);
+  }
+}
+
+function zoneClass(val,maxAbs){
+  if(!val||maxAbs===0)return"";
+  const r=Math.abs(val)/maxAbs;
+  const s=val>0?"p":"n";
+  if(r>0.6)return`z${s}3`;
+  if(r>0.3)return`z${s}2`;
+  return`z${s}1`;
+}
+
+function getTags(s){
+  let t="";
+  if(S.spot&&Math.abs(s.strike-S.spot)<0.5)t+=`<span class="tag t-atm">ATM</span>`;
+  if(S.flip&&Math.abs(s.strike-S.flip)<0.75)t+=`<span class="tag t-flip">FLIP</span>`;
+  if(S.callOIWall&&s.strike===S.callOIWall.strike)t+=`<span class="tag t-cw">C·OI</span>`;
+  if(S.putOIWall&&s.strike===S.putOIWall.strike)t+=`<span class="tag t-pw">P·OI</span>`;
+  if(S.callVolWall&&s.strike===S.callVolWall.strike)t+=`<span class="tag t-cv">C·VOL</span>`;
+  if(S.putVolWall&&s.strike===S.putVolWall.strike)t+=`<span class="tag t-pv">P·VOL</span>`;
+  return t;
+}
+
+function rowBorder(s){
+  if(S.spot&&Math.abs(s.strike-S.spot)<0.5)return"border-left-color:rgba(255,220,0,0.45)";
+  if(S.flip&&Math.abs(s.strike-S.flip)<0.75)return"border-left-color:rgba(136,136,255,0.45)";
+  if(S.callOIWall&&s.strike===S.callOIWall.strike)return"border-left-color:rgba(255,61,61,0.55)";
+  if(S.putOIWall&&s.strike===S.putOIWall.strike)return"border-left-color:rgba(0,221,119,0.55)";
+  return"";
+}
+
+function divBar(val,vVal,maxA,maxV,posCol,negCol,vPosCol,vNegCol){
+  const hw=48;
+  const bw=Math.min((Math.abs(val)/maxA*hw),hw).toFixed(1);
+  const vbw=Math.min((Math.abs(vVal)/maxV*hw),hw).toFixed(1);
+  const pos=val>=0,vpos=vVal>=0;
+  const mainBar=pos
+    ?`<div class="dp" style="width:${bw}%;background:${posCol}"></div>`
+    :`<div class="dn" style="width:${bw}%;background:${negCol}"></div>`;
+  const volBar=vpos
+    ?`<div class="dvp" style="width:${vbw}%;background:${vPosCol}"></div>`
+    :`<div class="dvn" style="width:${vbw}%;background:${vNegCol}"></div>`;
+  const vc=pos?posCol:negCol;
+  return`<div class="dbw"><div class="dzero"></div>${mainBar}${volBar}</div><div class="bval" style="color:${vc}">${pos?"+":""}${fmt(val)}</div>`;
+}
+
+function greekSection(label,color,netOI,netVol,fOI,fVol,posCol,negCol,vPosCol,vNegCol){
+  const rows=S.strikes;
+  if(!rows.length)return"";
+  const maxA=Math.max(...rows.map(s=>Math.abs(s[fOI])),1);
+  const maxV=Math.max(...rows.map(s=>Math.abs(s[fVol])),1);
+  const sym=label==="GEX"?"γ":label==="DEX"?"Δ":label==="VANNA"?"ν":"χ";
+  const sort=S.volSort[label]||"strike";
+  const netColor=netOI>=0?posCol:negCol;
+  const biasTxt=netOI>=0?(label==="GEX"?"Positive γ":"Bullish"):(label==="GEX"?"Negative γ":"Bearish");
+
+  // OI chart — always by strike descending
+  const oiRows=[...rows].reverse().map(s=>{
+    const val=s[fOI],vVal=s[fVol];
+    const zone=zoneClass(val,maxA);
+    return`<div class="srow ${zone}" style="${rowBorder(s)}">
+      <div class="slbl">${getTags(s)}$${s.strike.toFixed(0)}</div>
+      ${divBar(val,vVal,maxA,maxV,posCol,negCol,vPosCol,vNegCol)}
+    </div>`;
+  }).join("");
+
+  // Vol chart — sortable
+  let volRows=[...rows].filter(s=>s[fVol]!==0);
+  if(sort==="mag") volRows.sort((a,b)=>Math.abs(b[fVol])-Math.abs(a[fVol]));
+  else volRows.reverse(); // strike descending
+  volRows=volRows.slice(0,22);
+  const volHTML=volRows.map(s=>{
+    const vv=s[fVol],bw=Math.min((Math.abs(vv)/maxV*100),100).toFixed(1),pos=vv>=0;
+    const bg=pos?vPosCol:vNegCol,vc=pos?posCol:negCol;
+    return`<div class="vrow">
+      <div class="slbl">${getTags(s)}$${s.strike.toFixed(0)}</div>
+      <div class="vbw"><div class="vb" style="width:${bw}%;background:${bg}"></div></div>
+      <div class="bval" style="color:${vc}">${pos?"+":""}${fmt(vv)}</div>
+    </div>`;
+  }).join("");
+
+  const oiAnimClass = S.oiPulse!=="off" ? `oi-pulse-${S.oiPulse}` : "";
+  const volAnimClass = S.volShimmer!=="off" ? `vol-shimmer-${S.volShimmer}` : "";
+
+  return`<div class="gsec">
+    <div class="ghdr">
+      <span style="color:${color};font-size:13px">${sym}</span>
+      <span class="glbl" style="color:${color}">${label} EXPOSURE</span>
+      <span class="gnet" style="color:${netColor}">${fmt(netOI)}</span>
+      <span class="gsub">${biasTxt} · Vol: ${fmt(netVol)}</span>
+    </div>
+    <div class="charts">
+      <div class="cpanel">
+        <div class="ctitle">${label} BY STRIKE — OI-WEIGHTED (DIVERGING)</div>
+        <div class="cscroll ${oiAnimClass}" id="sc-oi-${label}">${oiRows}</div>
+        <div class="cleg">
+          <span>▬ OI bars diverge from center</span>
+          <span>▬ Vol overlay (thin)</span>
+          <span style="color:#443300">▬ ATM</span>
+          ${label==="GEX"?'<span style="color:#222244">▬ Flip</span>':""}
+          <span style="color:#441111">▬ C·OI</span>
+          <span style="color:#114411">▬ P·OI</span>
+        </div>
+      </div>
+      <div class="cpanel">
+        <div class="ctitle">
+          <span>${label} — VOLUME-WEIGHTED</span>
+          <span class="sort-grp">
+            <button class="sbtn ${sort==="strike"?"on":""}" onclick="setSort('${label}','strike')">Strike</button>
+            <button class="sbtn ${sort==="mag"?"on":""}" onclick="setSort('${label}','mag')">Size</button>
+          </span>
+        </div>
+        <div class="cscroll ${volAnimClass}" id="sc-vol-${label}">${volHTML}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function saveScrolls(){
+  const scrolls={};
+  document.querySelectorAll('.cscroll').forEach(el=>{
+    if(el.id)scrolls[el.id]=el.scrollTop;
+  });
+  return scrolls;
+}
+function restoreScrolls(scrolls){
+  document.querySelectorAll('.cscroll').forEach(el=>{
+    if(el.id&&scrolls[el.id]!=null)el.scrollTop=scrolls[el.id];
+  });
+}
+
+function eodPanel(eod){
+  const mult=S.mult||eod.mult||40.5;
+  const spot=S.spot||eod.spot;
+  const neg=eod.regime==="NEGATIVE";
+
+  // Build strike table — show ±8% from current spot, sorted high to low
+  const rows=[...eod.allStrikes]
+    .filter(s=>spot?Math.abs(s.strike-spot)/spot<0.08:true)
+    .sort((a,b)=>b.strike-a.strike);
+
+  const maxAbsGex=Math.max(...rows.map(s=>Math.abs(s.netGex)),1);
+
+  const strikeRows=rows.map(s=>{
+    const nqVal=Math.round(s.strike*mult);
+    const dist=spot?((s.strike-spot)/spot*100).toFixed(1):null;
+    const pos=s.netGex>=0;
+    const ratio=Math.abs(s.netGex)/maxAbsGex;
+    const alpha=Math.max(0.05,Math.min(ratio*0.22,0.22));
+    const bg=pos?`rgba(0,221,119,${alpha})`:`rgba(255,61,61,${alpha})`;
+    const gexColor=pos?"var(--green)":"var(--red)";
+    const isFlip=eod.flip&&Math.abs(s.strike-eod.flip)<0.75;
+    const isATM=spot&&Math.abs(s.strike-spot)<0.5;
+    const isCwall=eod.callOIWall&&s.strike===eod.callOIWall;
+    const isPwall=eod.putOIWall&&s.strike===eod.putOIWall;
+    let tags="";
+    if(isATM)tags+=`<span class="tag t-atm">ATM</span>`;
+    if(isFlip)tags+=`<span class="tag t-flip">FLIP</span>`;
+    if(isCwall)tags+=`<span class="tag t-cw">C·OI</span>`;
+    if(isPwall)tags+=`<span class="tag t-pw">P·OI</span>`;
+
+    return`<tr style="background:${bg};border-left:2px solid ${isFlip?"rgba(136,136,255,0.5)":isATM?"rgba(255,220,0,0.4)":isCwall?"rgba(255,61,61,0.4)":isPwall?"rgba(0,221,119,0.4)":"transparent"}">
+      <td style="padding:3px 8px;font-size:10px;text-align:right;white-space:nowrap">${tags}$${s.strike.toFixed(0)}</td>
+      <td style="padding:3px 8px;font-size:10px;color:#888;text-align:right">${nqVal.toLocaleString()}</td>
+      <td style="padding:3px 8px;font-size:10px;color:${gexColor};text-align:right">${pos?"+":""}${fmt(s.netGex)}</td>
+      <td style="padding:3px 8px;font-size:10px;color:var(--blue);text-align:right">${fmt(s.netDex)}</td>
+      <td style="padding:3px 8px;font-size:9px;color:${dist>0?"var(--green)":"var(--red)"};text-align:right">${dist!=null?(dist>0?"+":"")+dist+"%":"—"}</td>
+    </tr>`;
+  }).join("");
+
+  return`<div class="sec-div">── EOD GAMMA MAP · NEXT DAY LEVELS ─────────</div>
+  <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:4px;padding:12px;margin-bottom:14px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+      <div>
+        <div style="font-size:8px;color:#333;letter-spacing:2px;margin-bottom:4px">EOD SNAPSHOT · ${eod.tradingDate||"—"} · ${eod.capturedAt?new Date(eod.capturedAt).toLocaleTimeString():"—"}</div>
+        <div style="font-size:10px;color:#555">Structural OI levels for next session · Live flip recalculated at open</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button onclick="triggerEOD()" style="background:transparent;border:1px solid #222;color:#555;border-radius:3px;padding:4px 12px;font-size:9px;letter-spacing:1px;cursor:pointer;font-family:var(--mono)">↻ REFRESH EOD</button>
+      </div>
+    </div>
+
+    <!-- Summary cards -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:12px;">
+      ${[
+        {l:"EOD GEX REGIME",v:eod.regime,c:neg?"var(--red)":"var(--green)"},
+        {l:"EOD FLIP",v:eod.flip?`$${eod.flip.toFixed(2)}`:"—",c:"var(--purple)",sub:eod.flipNQ?`NQ ~${eod.flipNQ.toLocaleString()}`:""},
+        {l:"CALL OI WALL",v:eod.callOIWall?`$${eod.callOIWall}`:"—",c:"var(--red)",sub:eod.callOIWallNQ?`NQ ~${eod.callOIWallNQ.toLocaleString()}`:""},
+        {l:"PUT OI WALL",v:eod.putOIWall?`$${eod.putOIWall}`:"—",c:"var(--green)",sub:eod.putOIWallNQ?`NQ ~${eod.putOIWallNQ.toLocaleString()}`:""},
+      ].map(x=>`<div style="background:var(--bg3);border:1px solid var(--border2);border-radius:4px;padding:8px 10px;">
+        <div style="font-size:8px;color:#333;letter-spacing:1px;margin-bottom:4px">${x.l}</div>
+        <div style="font-family:var(--disp);font-size:15px;font-weight:700;color:${x.c}">${x.v}</div>
+        ${x.sub?`<div style="font-size:9px;color:#444;margin-top:1px">${x.sub}</div>`:""}
+      </div>`).join("")}
+    </div>
+
+    <!-- Strike table -->
+    <div style="overflow-y:auto;max-height:320px;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="position:sticky;top:0;background:var(--bg2);z-index:2;">
+            <th style="padding:4px 8px;font-size:8px;color:#333;letter-spacing:1px;text-align:right;font-weight:400">QQQ STRIKE</th>
+            <th style="padding:4px 8px;font-size:8px;color:#333;letter-spacing:1px;text-align:right;font-weight:400">NQ EQUIV</th>
+            <th style="padding:4px 8px;font-size:8px;color:#333;letter-spacing:1px;text-align:right;font-weight:400">NET GEX</th>
+            <th style="padding:4px 8px;font-size:8px;color:#333;letter-spacing:1px;text-align:right;font-weight:400">NET DEX</th>
+            <th style="padding:4px 8px;font-size:8px;color:#333;letter-spacing:1px;text-align:right;font-weight:400">DIST</th>
+          </tr>
+        </thead>
+        <tbody>${strikeRows}</tbody>
+      </table>
+    </div>
+    <div style="font-size:7px;color:#2a2a2a;margin-top:8px;">Row shading intensity = GEX concentration magnitude. Green = positive gamma zone. Red = negative gamma zone.</div>
+  </div>`;
+}
+
+async function triggerEOD(){
+  try{
+    const r=await fetch("/api/eod-snapshot");
+    const d=await r.json();
+    if(d.levels){S.eod=d.levels;S.eodLoaded=true;render();}
+  }catch(e){alert("EOD snapshot failed: "+e.message);}
+}
+
+function render(){
+  const{spot,nqSpot,strikes,flip,regime,gexOI,gexVol,dexOI,dexVol,
+        vannaOI,vannaVol,charmOI,charmVol,
+        exps,selExp,loading,error,updated,mkt,
+        callOIWall,putOIWall,callVolWall,putVolWall}=S;
+  const neg=regime==="NEGATIVE";
+
+  function wallCard(cls,lbl,s,field,color){
+    if(!s)return`<div class="wcard ${cls}"><div class="wl">${lbl}</div><div class="ws" style="color:#2a2a2a">—</div></div>`;
+    return`<div class="wcard ${cls}">
+      <div class="wl">${lbl}</div>
+      <div class="ws" style="color:${color}">$${s.strike.toFixed(0)}</div>
+      <div class="wn">NQ ~${nq(s.strike)}</div>
+      <div class="wv">${fmt(s[field]||0,0)} contracts</div>
+    </div>`;
+  }
+
+  const html=`
+  <div class="hdr">
+    <div class="hdr-l">
+      <div class="eye">NQ · MNQ · OPTIONS EXPOSURE TRACKER</div>
+      <div class="ttl">QQQ <span>GEX · DEX · VANNA · CHARM</span></div>
+    </div>
+    <div class="hdr-r">
+      ${spot?`<div class="qqq">QQQ $${spot.toFixed(2)}</div>`:""}
+      <div class="nqp">${mkt.open?'<span class="live-dot"></span>':""}NQ ${nqSpot?nqSpot.toFixed(0):(spot?`~${nq(spot)}`:"—")}</div>
+      <div style="font-size:9px;color:#333;margin-top:3px;display:flex;align-items:center;gap:6px;justify-content:flex-end;">
+        <span style="color:#2a2a2a">×${S.mult.toFixed(3)}</span>
+        <input type="number" step="0.01" value="${S.mult.toFixed(3)}"
+          style="width:62px;background:#0e0e14;border:1px solid #1a1a1a;color:#555;padding:2px 5px;font-size:9px;font-family:var(--mono);border-radius:2px;text-align:right;"
+          onchange="setMult(parseFloat(this.value))"
+          title="QQQ→NQ multiplier. Override if levels are off. Today's = NQ price ÷ QQQ price"/>
+      </div>
+      <div class="upd">${updated?"↻ "+updated.toLocaleTimeString():"—"}</div>
+    </div>
+  </div>
+
+  ${!mkt.open?`<div class="bnr bnr-closed">
+    <span style="font-size:18px;margin-top:1px">🕐</span>
+    <div><div class="bt">MARKET CLOSED</div><div class="bm">${mkt.msg}<br>Live Greeks + OI require RTH session.</div></div>
+  </div>`:""}
+
+  ${regime?`<div class="bnr bnr-regime ${neg?"neg":"pos"}">
+    <div class="rdot" style="background:${neg?"var(--red)":"var(--green)"}"></div>
+    <div style="flex:1;min-width:160px">
+      <div class="rlbl" style="color:${neg?"var(--red)":"var(--green)"}">${neg?"⚠ NEGATIVE GAMMA REGIME":"✓ POSITIVE GAMMA REGIME"}</div>
+      <div class="rsub">${neg?"Dealers short γ — trending conditions, amplified volatility":"Dealers long γ — mean-reverting, range-bound conditions"}</div>
+    </div>
+    ${flip?`<div class="rflip">
+      <div class="fl">γ FLIP LEVEL</div>
+      <div class="fv">$${flip.toFixed(2)}</div>
+      <div class="fn">NQ ~${nq(flip)}</div>
+      <div class="fd" style="color:${spot<flip?"var(--red)":"var(--green)"}">${spot<flip?`↑ +${(flip-spot).toFixed(2)} above`:`↓ -${(spot-flip).toFixed(2)} below`}</div>
+    </div>`:""}
+  </div>`:""}
+
+  ${strikes.length>0?`
+  <div class="sec-div">── KEY LEVELS ──────────────────────────────</div>
+  <div class="walls">
+    ${wallCard("cwall","CALL OI WALL · Resistance",callOIWall,"callOI","var(--red)")}
+    ${wallCard("pwall","PUT OI WALL · Support",putOIWall,"putOI","var(--green)")}
+    ${wallCard("cvwall","CALL VOL WALL · Intraday Resist.",callVolWall,"callVol","var(--orange)")}
+    ${wallCard("pvwall","PUT VOL WALL · Intraday Support",putVolWall,"putVol","var(--teal)")}
+    ${flip?`<div class="wcard gflip">
+      <div class="wl">γ FLIP LEVEL · Regime Boundary</div>
+      <div class="ws" style="color:var(--purple)">$${flip.toFixed(2)}</div>
+      <div class="wn">NQ ~${nq(flip)}</div>
+      <div class="wv">${neg?"Below flip → neg γ active":"Above flip → pos γ active"}</div>
+    </div>`:""}
+    <div class="wcard dexb">
+      <div class="wl">NET DEX BIAS</div>
+      <div class="ws" style="color:${dexOI>=0?"var(--blue)":"var(--pink)"}">${dexOI>=0?"BULLISH":"BEARISH"}</div>
+      <div class="wn">${fmt(dexOI)} OI · ${fmt(dexVol)} Vol</div>
+      <div class="wv">Net dealer delta exposure</div>
+    </div>
+    <div class="wcard" style="border-top:2px solid rgba(187,68,255,0.35);">
+      <div class="wl">NET CHARM · χ</div>
+      <div class="ws" style="color:${charmOI>=0?"var(--charm)":"#7700cc"}">${charmOI>=0?"+":""}${fmt(charmOI)}</div>
+      <div class="wn">Vol: ${fmt(charmVol)}</div>
+      <div class="wv">${charmOI>=0?"Bullish time-decay flow":"Bearish time-decay flow"} into close</div>
+    </div>
+  </div>`:""}
+
+  ${S.eodLoaded && S.eod ? eodPanel(S.eod) : ""}
+
+  <div class="sec-div">── EXPOSURE TOTALS ──────────────────────────</div>
+  <div class="stats">
+    ${[
+      {l:"NET GEX · OI",v:gexOI,c:gexOI<0?"var(--red)":"var(--green)",s:null},
+      {l:"NET GEX · VOL",v:gexVol,c:gexVol<0?"var(--red)":"var(--green)",s:null},
+      {l:"NET DEX · OI",v:dexOI,c:dexOI<0?"var(--pink)":"var(--blue)",s:dexOI<0?"BEARISH":"BULLISH"},
+      {l:"NET DEX · VOL",v:dexVol,c:dexVol<0?"var(--pink)":"var(--blue)",s:dexVol<0?"BEARISH FLOW":"BULLISH FLOW"},
+    ].map(x=>`<div class="scard"><div class="sl">${x.l}</div><div class="sv" style="color:${x.c}">${fmt(x.v)}</div>${x.s?`<div class="ss" style="color:${x.c}99">${x.s}</div>`:""}</div>`).join("")}
+  </div>
+
+  <div class="ctrl">
+    ${["all",...exps].map(e=>`<button class="ebtn ${selExp===e?"on":""}" onclick="setExp('${e}')">${e==="all"?"ALL EXP":e}</button>`).join("")}
+  </div>
+
+  <div class="anim-panel">
+    <span style="font-size:8px;color:#333;letter-spacing:2px;">ANIMATIONS</span>
+    <div class="anim-group">
+      <label>OI PULSE</label>
+      <select class="anim-sel" onchange="setAnim('oiPulse',this.value)">
+        <option value="off" ${S.oiPulse==="off"?"selected":""}>Off</option>
+        <option value="slow" ${S.oiPulse==="slow"?"selected":""}>Slow</option>
+        <option value="med" ${S.oiPulse==="med"?"selected":""}>Medium</option>
+        <option value="fast" ${S.oiPulse==="fast"?"selected":""}>Fast</option>
+      </select>
+    </div>
+    <div class="anim-group">
+      <label>VOL SHIMMER</label>
+      <select class="anim-sel" onchange="setAnim('volShimmer',this.value)">
+        <option value="off" ${S.volShimmer==="off"?"selected":""}>Off</option>
+        <option value="slow" ${S.volShimmer==="slow"?"selected":""}>Slow</option>
+        <option value="med" ${S.volShimmer==="med"?"selected":""}>Medium</option>
+        <option value="fast" ${S.volShimmer==="fast"?"selected":""}>Fast</option>
+      </select>
+    </div>
+    <div class="anim-group">
+      <label>FLASH ON REFRESH</label>
+      <select class="anim-sel" onchange="setAnim('volFlash',this.value==='true')">
+        <option value="true"  ${S.volFlash?"selected":""}>On</option>
+        <option value="false" ${!S.volFlash?"selected":""}>Off</option>
+      </select>
+    </div>
+    <span style="font-size:8px;color:#2a2a2a;margin-left:auto">OI = established battlefield · Vol = current battle</span>
+  </div>
+
+  ${loading&&strikes.length===0?`<div class="ldmsg">LOADING OPTIONS CHAIN...</div>`:""}
+  ${error?`<div class="errbox">⚠ ${error}</div>`:""}
+
+  ${strikes.length>0?`
+    <div class="sec-div">── GAMMA EXPOSURE (GEX) ─────────────────────</div>
+    ${greekSection("GEX","var(--green)",gexOI,gexVol,"netGex","netVGex","#2d9e6b","#c94040","rgba(45,158,107,0.28)","rgba(201,64,64,0.28)")}
+
+    <div class="sec-div">── DELTA EXPOSURE (DEX) ─────────────────────</div>
+    ${greekSection("DEX","var(--blue)",dexOI,dexVol,"netDex","netVDex","#4499ff","#ff4488","rgba(68,153,255,0.25)","rgba(255,68,136,0.25)")}
+
+    <div class="sec-div">── VANNA EXPOSURE ───────────────────────────</div>
+    ${greekSection("VANNA","var(--vanna)",vannaOI,vannaVol,"netVanna","netVVanna","#ff9944","#cc5500","rgba(255,153,68,0.25)","rgba(204,85,0,0.25)")}
+
+    <div class="sec-div">── CHARM EXPOSURE ───────────────────────────</div>
+    ${greekSection("CHARM","var(--charm)",charmOI,charmVol,"netCharm","netVCharm","#bb44ff","#7700cc","rgba(187,68,255,0.25)","rgba(119,0,204,0.25)")}
+
+    ${dteSectionHTML()}
+    ${timelineSectionHTML()}
+  `:""}
+
+  <div class="bbar">
+    <button class="rfbtn" onclick="fetchData()" ${loading?"disabled":""}>
+      ${loading?"REFRESHING...":"↻ REFRESH NOW"}
+    </button>
+    <div class="albl">AUTO-REFRESH 15s · MARKET HOURS ONLY</div>
+  </div>
+
+  <div class="legend">
+    <div class="ltitle">HOW TO READ THIS</div>
+    <div class="lgrid">
+      <div class="lrow"><span style="color:var(--green)">+GEX</span> → dealers long gamma → mean-reversion / S&R at strike. Darker background = heavier concentration.</div>
+      <div class="lrow"><span style="color:var(--red)">-GEX</span> → dealers short gamma → trending, amplified volatility (your zone)</div>
+      <div class="lrow"><span style="color:var(--purple)">Flip</span> → net GEX = 0 → regime boundary. Below flip = negative gamma for NQ.</div>
+      <div class="lrow"><span style="color:var(--blue)">+DEX</span> → dealers net long delta → buying pressure to hedge</div>
+      <div class="lrow"><span style="color:var(--pink)">-DEX</span> → dealers net short delta → selling pressure to hedge</div>
+      <div class="lrow"><span style="color:var(--vanna)">Vanna</span> → vol-driven delta flows → amplifies moves when VIX spikes or compresses</div>
+      <div class="lrow"><span style="color:var(--charm)">Charm</span> → time-decay delta flows → directional hedging pressure into close / expiry</div>
+      <div class="lrow"><span style="color:var(--red)">C·OI</span> → call OI wall → overhead structural resistance</div>
+      <div class="lrow"><span style="color:var(--green)">P·OI</span> → put OI wall → downside structural support</div>
+      <div class="lrow">Diverging bars extend left (negative) or right (positive) from center zero line. Thin overlay = volume-weighted intraday flow.</div>
+    </div>
+  </div>`;
+
+  const scrolls=saveScrolls();
+  document.getElementById("root").innerHTML=html;
+  restoreScrolls(scrolls);
+  // Render canvas charts after DOM is updated
+  requestAnimationFrame(renderTimeline);
+}
+
+async function fetchEOD(){
+  try{
+    const res=await fetch("/api/levels");
+    const data=await res.json();
+    if(data.source==="eod_snapshot"&&data.allStrikes){
+      S.eod=data;
+      S.eodLoaded=true;
+    }
+  }catch(_){}
+}
+
+function setExp(e){S.selExp=e;fetchData();}
+function setSort(greek,v){S.volSort[greek]=v;render();}
+function setAnim(key,val){S[key]=val;render();}
+function setMult(v){if(v&&v>30&&v<60){S.mult=v;S.nqSpot=S.spot?S.spot*v:null;render();}}
+function setTlChart(t){S.tlChartType=t;renderTimeline();}
+function setTlOffset(v){S.tlOffset=parseInt(v)||0;renderTimeline();}
+
+// Save snapshot to KV session store
+async function saveSnapshot(){
+  if(!S.spot||!S.mkt.open)return;
+  const snap={ts:Date.now(),gexOI:S.gexOI,gexVol:S.gexVol,dexOI:S.dexOI,dexVol:S.dexVol,flip:S.flip,regime:S.regime,spot:S.spot};
+  S.timeline.push(snap);
+  try{ await fetch(SESSION_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(snap)}); }catch(_){}
+  renderTimeline();
+}
+
+// Load today's session from KV
+async function loadSession(){
+  try{
+    const r=await fetch(SESSION_API);
+    const d=await r.json();
+    if(d.session?.snapshots?.length){S.timeline=d.session.snapshots;renderTimeline();}
+  }catch(_){}
+}
+
+// Draw 4 timeline charts on canvas
+function renderTimeline(){
+  const charts=[
+    {id:"tl-gex-oi", data:S.timeline.map(s=>s.gexOI), posCol:"#00dd77",negCol:"#ff3d3d"},
+    {id:"tl-gex-vol",data:S.timeline.map(s=>s.gexVol),posCol:"#00dd77",negCol:"#ff3d3d"},
+    {id:"tl-dex-oi", data:S.timeline.map(s=>s.dexOI), posCol:"#4499ff",negCol:"#ff4488"},
+    {id:"tl-dex-vol",data:S.timeline.map(s=>s.dexVol),posCol:"#4499ff",negCol:"#ff4488"},
+  ];
+  for(const c of charts){
+    const canvas=document.getElementById(c.id);
+    if(!canvas)continue;
+    const W=canvas.width=canvas.offsetWidth||300;
+    const H=canvas.height=100;
+    const ctx=canvas.getContext("2d");
+    ctx.clearRect(0,0,W,H);
+    const total=c.data.length;
+    if(!total){ctx.fillStyle="#222";ctx.font="9px monospace";ctx.fillText("Waiting for data...",8,H/2);continue;}
+    const win=Math.min(S.tlWindow,total);
+    const maxOff=Math.max(0,total-win);
+    const off=Math.min(S.tlOffset,maxOff);
+    const slice=c.data.slice(Math.max(0,total-win-off),total-off||undefined);
+    const regSlice=S.timeline.slice(Math.max(0,total-win-off),total-off||undefined);
+    const maxAbs=Math.max(...slice.map(Math.abs),1);
+    const midY=H/2;
+    const sy=v=>midY-(v/maxAbs)*midY*0.88;
+    // Zero line
+    ctx.strokeStyle="rgba(255,255,255,0.07)";ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(0,midY);ctx.lineTo(W,midY);ctx.stroke();
+    // Regime flip markers
+    let prev=null;
+    regSlice.forEach((s,i)=>{
+      if(s.regime!==prev&&prev!==null){
+        const x=(i/slice.length)*W;
+        ctx.strokeStyle="rgba(136,136,255,0.5)";ctx.lineWidth=1;
+        ctx.setLineDash([2,3]);ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();ctx.setLineDash([]);
+      }
+      prev=s.regime;
+    });
+    if(S.tlChartType==="bar"){
+      const bw=Math.max(1,(W/slice.length)-0.5);
+      slice.forEach((v,i)=>{
+        const x=(i/slice.length)*W,y=sy(v);
+        ctx.fillStyle=v>=0?c.posCol:c.negCol;
+        v>=0?ctx.fillRect(x,y,bw,midY-y):ctx.fillRect(x,midY,bw,y-midY);
+      });
+    } else {
+      ctx.lineWidth=1.5;ctx.beginPath();
+      slice.forEach((v,i)=>{const x=(i/(slice.length-1||1))*W,y=sy(v);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
+      const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,c.posCol);g.addColorStop(1,c.negCol);
+      ctx.strokeStyle=g;ctx.stroke();
+      const last=slice[slice.length-1]||0;
+      ctx.lineTo(W,midY);ctx.lineTo(0,midY);ctx.closePath();
+      const fg=ctx.createLinearGradient(0,0,0,H);fg.addColorStop(0,c.posCol+"44");fg.addColorStop(1,c.negCol+"44");
+      ctx.fillStyle=fg;ctx.fill();
+    }
+    // Latest value
+    const last=slice[slice.length-1]||0;
+    ctx.fillStyle=last>=0?c.posCol:c.negCol;ctx.font="bold 9px monospace";
+    ctx.fillText(fmt(last),4,11);
+  }
+  const sl=document.getElementById("tl-slider");
+  if(sl){sl.max=Math.max(0,S.timeline.length-S.tlWindow);sl.value=S.tlOffset;}
+}
+
+// Build 0DTE vs Weekly split
+function build0DTESplit(contracts,spot){
+  const today=new Date().toLocaleDateString("en-CA",{timeZone:"America/New_York"});
+  const map0={},mapW={};
+  for(const c of contracts){
+    const strike=c.details?.strike_price;
+    const type=c.details?.contract_type;
+    const is0=c.details?.is_0dte||(c.details?.expiration_date===today);
+    const oi=c.open_interest||0;
+    const gamma=c.greeks?.gamma||0;
+    const delta=c.greeks?.delta||0;
+    const map=is0?map0:mapW;
+    if(!map[strike])map[strike]={strike,callOI:0,putOI:0,netGex:0,netDex:0};
+    if(type==="call"){map[strike].callOI+=oi;map[strike].netGex+=gamma*oi*100*spot*spot/100;map[strike].netDex+=delta*oi*100;}
+    else{map[strike].putOI+=oi;map[strike].netGex-=gamma*oi*100*spot*spot/100;map[strike].netDex+=delta*oi*100;}
+  }
+  const toArr=(m)=>Object.values(m).filter(s=>s.strike>=spot*.93&&s.strike<=spot*1.07).sort((a,b)=>b.strike-a.strike);
+  S.dte0strikes=toArr(map0);
+  S.weeklyStrikes=toArr(mapW);
+}
+
+function dteSectionHTML(){
+  if(!S.strikes.length)return"";
+  const maxG=Math.max(...[...S.dte0strikes,...S.weeklyStrikes].map(s=>Math.abs(s.netGex)),1);
+  const panel=(rows,label,color)=>{
+    const rowsHTML=rows.slice(0,20).map(s=>{
+      const pcr=s.callOI>0?(s.putOI/s.callOI).toFixed(2):"—";
+      const bw=(Math.abs(s.netGex)/maxG*100).toFixed(1);
+      const pos=s.netGex>=0;
+      const bg=pos?"linear-gradient(90deg,#2d9e6b88,#00ee7744)":"linear-gradient(90deg,#c9404088,#ff555544)";
+      const vc=pos?"var(--green)":"var(--red)";
+      const pcrColor=parseFloat(pcr)>1.5?"var(--green)":parseFloat(pcr)<0.7?"var(--red)":"#555";
+      return`<div class="dte-row">
+        <div class="dte-strike" style="color:${S.spot&&Math.abs(s.strike-S.spot)<0.5?"var(--yellow)":"var(--dim)"}">$${s.strike.toFixed(0)}</div>
+        <div class="dte-bar-wrap"><div class="dte-bar" style="width:${bw}%;background:${bg}"></div></div>
+        <div class="dte-val" style="color:${vc}">${pos?"+":""}${fmt(s.netGex)}</div>
+        <div class="dte-pcr" style="color:${pcrColor}">PCR ${pcr}</div>
+      </div>`;
+    }).join("");
+    return`<div class="dte-panel">
+      <div class="dte-title" style="color:${color}">${label}</div>
+      <div class="dte-scroll">${rowsHTML||'<div style="padding:10px 14px;font-size:9px;color:#333">No data</div>'}</div>
+    </div>`;
+  };
+  return`<div class="sec-div">── 0DTE VS WEEKLY OI SPLIT ──────────────────</div>
+  <div class="dte-section">
+    <div class="dte-grid">
+      ${panel(S.dte0strikes,"0DTE — Today's Expiry","var(--yellow)")}
+      ${panel(S.weeklyStrikes,"WEEKLY+ — Structural OI","var(--purple)")}
+    </div>
+  </div>`;
+}
+
+function timelineSectionHTML(){
+  const last=S.timeline[S.timeline.length-1];
+  const ratio=last&&last.gexOI!==0?(last.dexOI/last.gexOI).toFixed(2):"—";
+  const rNum=parseFloat(ratio);
+  const rColor=isNaN(rNum)?"#444":rNum>0?"var(--blue)":"var(--pink)";
+  return`<div class="sec-div">── GREEK FLOW TIMELINE ──────────────────────</div>
+  <div class="tl-section">
+    <div class="tl-header">
+      <span class="tl-title">SESSION HISTORY · ${S.timeline.length} SNAPSHOTS</span>
+      <div class="tl-toggle">
+        <button class="${S.tlChartType==="line"?"on":""}" onclick="setTlChart('line')">LINE</button>
+        <button class="${S.tlChartType==="bar"?"on":""}" onclick="setTlChart('bar')">BAR</button>
+      </div>
+      <span style="font-size:9px;color:#333;margin-left:auto">DEX/GEX RATIO: <span style="color:${rColor}">${ratio}</span></span>
+      ${S.sessionLoaded?'<span style="font-size:8px;color:#444">↻ Session restored</span>':""}
+    </div>
+    <div class="tl-grid">
+      <div class="tl-chart">
+        <div class="tl-chart-title"><span style="color:var(--green)">NET GEX · OI</span><span class="tl-net" style="color:${S.gexOI>=0?"var(--green)":"var(--red)"}">${fmt(S.gexOI)}</span></div>
+        <div class="tl-canvas-wrap"><canvas id="tl-gex-oi"></canvas></div>
+      </div>
+      <div class="tl-chart">
+        <div class="tl-chart-title"><span style="color:var(--green)">NET GEX · VOL</span><span class="tl-net" style="color:${S.gexVol>=0?"var(--green)":"var(--red)"}">${fmt(S.gexVol)}</span></div>
+        <div class="tl-canvas-wrap"><canvas id="tl-gex-vol"></canvas></div>
+      </div>
+      <div class="tl-chart">
+        <div class="tl-chart-title"><span style="color:var(--blue)">NET DEX · OI</span><span class="tl-net" style="color:${S.dexOI>=0?"var(--blue)":"var(--pink)"}">${fmt(S.dexOI)}</span></div>
+        <div class="tl-canvas-wrap"><canvas id="tl-dex-oi"></canvas></div>
+      </div>
+      <div class="tl-chart">
+        <div class="tl-chart-title"><span style="color:var(--blue)">NET DEX · VOL</span><span class="tl-net" style="color:${S.dexVol>=0?"var(--blue)":"var(--pink)"}">${fmt(S.dexVol)}</span></div>
+        <div class="tl-canvas-wrap"><canvas id="tl-dex-vol"></canvas></div>
+      </div>
+    </div>
+    <div class="tl-slider-wrap">
+      <input type="range" class="tl-slider" id="tl-slider" min="0" max="${Math.max(0,S.timeline.length-S.tlWindow)}" value="${S.tlOffset}" oninput="setTlOffset(this.value)" title="Scroll timeline left/right"/>
+      <div style="display:flex;justify-content:space-between;font-size:7px;color:#2a2a2a;margin-top:2px;">
+        <span>← OLDER</span><span>SHOWING ${Math.min(S.tlWindow,S.timeline.length)} OF ${S.timeline.length} POINTS · ${S.tlWindow}pt WINDOW</span><span>RECENT →</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+fetchEOD();
+loadSession();
+fetchData();
+setInterval(fetchData,15000);
+setInterval(fetchEOD,300000);
+setInterval(()=>{S.mkt=mktStatus();render();},30000);
+</script>
+</body>
+</html>
