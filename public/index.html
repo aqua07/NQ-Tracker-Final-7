@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>NQ/MNQ · Gamma Tracker</title>
+<title>Options Exposure Tracker</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet"/>
 <style>
@@ -142,6 +142,17 @@ html,body{background:var(--bg);color:var(--text);font-family:var(--mono);min-hei
 .rfbtn:disabled{color:#222;border-color:#111;cursor:default;}
 .albl{font-size:7px;color:#1e1e1e;}
 .legend{padding:12px 14px;background:var(--bg2);border:1px solid #121212;border-radius:4px;}
+/* Ticker selector */
+.ticker-bar{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+.ticker-preset{background:transparent;border:1px solid #1a1a22;color:#444;border-radius:3px;padding:4px 12px;font-size:10px;letter-spacing:2px;cursor:pointer;font-family:var(--mono);transition:all .15s;}
+.ticker-preset:hover{border-color:#333;color:#888;}
+.ticker-preset.on{background:#161622;border-color:#2a2a44;color:#aaaaff;}
+.ticker-sep{width:1px;height:16px;background:#1a1a22;margin:0 2px;}
+.ticker-input{background:#0e0e14;border:1px solid #1a1a22;color:#666;border-radius:3px;padding:4px 8px;font-size:10px;font-family:var(--mono);width:80px;text-transform:uppercase;letter-spacing:1px;}
+.ticker-input:focus{outline:none;border-color:#2a2a44;color:#888;}
+.ticker-go{background:transparent;border:1px solid #1a1a22;color:#444;border-radius:3px;padding:4px 10px;font-size:9px;letter-spacing:1px;cursor:pointer;font-family:var(--mono);}
+.ticker-go:hover{border-color:#333;color:#888;}
+.ticker-label{font-size:8px;color:#252528;letter-spacing:3px;margin-right:4px;}
 .ltitle{font-size:7px;color:#2a2a2a;letter-spacing:2px;margin-bottom:8px;}
 .lgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:2px;}
 .lrow{font-size:8px;color:#383838;line-height:2.2;}
@@ -249,7 +260,17 @@ html,body{background:var(--bg);color:var(--text);font-family:var(--mono);min-hei
 const BASE="/api/options";
 const SESSION_API="/api/session";
 
+// Ticker metadata matching server-side logic
+const TICKER_META={
+  QQQ:{futuresLabel:"NQ/MNQ",multApprox:40.5},
+  SPY:{futuresLabel:"ES/MES",multApprox:10.0},
+  IWM:{futuresLabel:"RTY/M2K",multApprox:10.0},
+};
+function getLocalMeta(sym){return TICKER_META[sym]||{futuresLabel:null,multApprox:1.0};}
+
 const S={
+  ticker:"QQQ",
+  futuresLabel:"NQ/MNQ",
   spot:null,nqSpot:null,mult:40.5,
   strikes:[],flip:null,regime:null,
   gexOI:0,gexVol:0,dexOI:0,dexVol:0,
@@ -393,24 +414,27 @@ async function fetchData(){
   if(!S.mkt.open){render();return;}
   S.loading=true;S.error=null;render();
   try{
-    const url=`${BASE}${S.selExp!=="all"?`?exp=${S.selExp}`:""}`;
+    const params=new URLSearchParams({symbol:S.ticker});
+    if(S.selExp!=="all")params.set("exp",S.selExp);
+    const url=`${BASE}?${params}`;
     const res=await fetch(url);
     if(!res.ok)throw new Error(`API error ${res.status}`);
     const data=await res.json();
     if(data.error)throw new Error(data.error);
-    const{spot,nqPrice,contracts}=data;
+    const{spot,futuresPrice,contracts}=data;
     if(!spot)throw new Error("No spot price returned");
     S.spot=spot;
-    // Only update mult from API if we got a real NQ futures price
-    // If null, keep last known mult (manual override or previous refresh)
-    if(data.mult&&data.mult>35&&data.mult<50){
+    // Update futures label from server response
+    if(data.futuresLabel)S.futuresLabel=data.futuresLabel;
+    else S.futuresLabel=getLocalMeta(S.ticker).futuresLabel;
+    // Multiplier update — same guard as before
+    if(data.mult&&data.mult>0.5&&data.mult<200){
       S.mult=data.mult;
       S.nqSpot=spot*data.mult;
-    } else if(nqPrice&&nqPrice>1000){
-      S.nqSpot=nqPrice;
-      S.mult=nqPrice/spot;
+    }else if(futuresPrice&&futuresPrice>0){
+      S.nqSpot=futuresPrice;
+      S.mult=futuresPrice/spot;
     }
-    // Never reset mult to default — preserve manual override across refreshes
     S.exps=data.expirations||[];
     const filtered=S.selExp==="all"?contracts:contracts.filter(c=>c.details?.expiration_date===S.selExp);
     const r=process(spot,filtered);
@@ -424,14 +448,11 @@ async function fetchData(){
     if(S.flip)S.regime=S.spot<S.flip?"NEGATIVE":"POSITIVE";
     else S.regime=S.gexOI<0?"NEGATIVE":"POSITIVE";
     S.updated=new Date();
-    // Build 0DTE vs weekly split
     build0DTESplit(filtered,spot);
-    // Save snapshot to session timeline
     saveSnapshot();
   }catch(e){S.error=e.message;}
   S.loading=false;
   render();
-  // Trigger vol flash on refresh
   if(S.volFlash && !S.error){
     document.querySelectorAll('.vrow').forEach(r=>r.classList.add('vol-flash'));
     setTimeout(()=>document.querySelectorAll('.vol-flash').forEach(r=>r.classList.remove('vol-flash')),700);
@@ -637,7 +658,7 @@ function eodPanel(eod){
         <thead>
           <tr style="position:sticky;top:0;background:var(--bg2);z-index:2;">
             <th style="padding:4px 8px;font-size:8px;color:#333;letter-spacing:1px;text-align:right;font-weight:400">QQQ STRIKE</th>
-            <th style="padding:4px 8px;font-size:8px;color:#333;letter-spacing:1px;text-align:right;font-weight:400">NQ EQUIV</th>
+            <th style="padding:4px 8px;font-size:8px;color:#333;letter-spacing:1px;text-align:right;font-weight:400">${S.futuresLabel||"EQUIV"}</th>
             <th style="padding:4px 8px;font-size:8px;color:#333;letter-spacing:1px;text-align:right;font-weight:400">NET GEX</th>
             <th style="padding:4px 8px;font-size:8px;color:#333;letter-spacing:1px;text-align:right;font-weight:400">NET DEX</th>
             <th style="padding:4px 8px;font-size:8px;color:#333;letter-spacing:1px;text-align:right;font-weight:400">DIST</th>
@@ -667,32 +688,48 @@ function render(){
 
   function wallCard(cls,lbl,s,field,color){
     if(!s)return`<div class="wcard ${cls}"><div class="wl">${lbl}</div><div class="ws" style="color:#2a2a2a">—</div></div>`;
+    const futEq=S.futuresLabel?`<div class="wn">${S.futuresLabel} ~${nq(s.strike)}</div>`:"";
     return`<div class="wcard ${cls}">
       <div class="wl">${lbl}</div>
       <div class="ws" style="color:${color}">$${s.strike.toFixed(0)}</div>
-      <div class="wn">NQ ~${nq(s.strike)}</div>
+      ${futEq}
       <div class="wv">${fmt(s[field]||0,0)} contracts</div>
     </div>`;
   }
 
+  const futLabel=S.futuresLabel||"FUTURES";
+  const isFutures=S.futuresLabel!==null;
   const html=`
   <div class="hdr">
     <div class="hdr-l">
-      <div class="eye">NQ · MNQ · OPTIONS EXPOSURE TRACKER</div>
-      <div class="ttl">QQQ <span>GEX · DEX · VANNA · CHARM</span></div>
+      <div class="eye">${futLabel} · OPTIONS EXPOSURE TRACKER</div>
+      <div class="ttl">${S.ticker} <span>GEX · DEX · VANNA · CHARM</span></div>
     </div>
     <div class="hdr-r">
-      ${spot?`<div class="qqq">QQQ $${spot.toFixed(2)}</div>`:""}
-      <div class="nqp">${mkt.open?'<span class="live-dot"></span>':""}NQ ${nqSpot?nqSpot.toFixed(0):(spot?`~${nq(spot)}`:"—")}</div>
-      <div style="font-size:9px;color:#333;margin-top:3px;display:flex;align-items:center;gap:6px;justify-content:flex-end;">
+      ${spot?`<div class="qqq">${S.ticker} $${spot.toFixed(2)}</div>`:""}
+      <div class="nqp">${mkt.open?'<span class="live-dot"></span>':""}${isFutures?(nqSpot?nqSpot.toFixed(0):(spot?`~${nq(spot)}`:"—"))+" <span style='font-size:12px;color:#444;font-weight:400'>"+futLabel+"</span>":""}</div>
+      ${isFutures?`<div style="font-size:9px;color:#333;margin-top:3px;display:flex;align-items:center;gap:6px;justify-content:flex-end;">
         <span style="color:#2a2a2a">×${S.mult.toFixed(3)}</span>
         <input type="number" step="0.01" value="${S.mult.toFixed(3)}"
           style="width:62px;background:#0e0e14;border:1px solid #1a1a1a;color:#555;padding:2px 5px;font-size:9px;font-family:var(--mono);border-radius:2px;text-align:right;"
           onchange="setMult(parseFloat(this.value))"
-          title="QQQ→NQ multiplier. Override if levels are off. Today's = NQ price ÷ QQQ price"/>
-      </div>
+          title="${S.ticker}→${futLabel} multiplier. Override if levels are off."/>
+      </div>`:""}
       <div class="upd">${updated?"↻ "+updated.toLocaleTimeString():"—"}</div>
     </div>
+  </div>
+
+  <!-- Ticker selector bar -->
+  <div class="ticker-bar">
+    <span class="ticker-label">TICKER</span>
+    ${["QQQ","SPY","IWM"].map(t=>`<button class="ticker-preset ${S.ticker===t?"on":""}" onclick="setTicker('${t}')">${t}</button>`).join("")}
+    <div class="ticker-sep"></div>
+    <input class="ticker-input" id="ticker-custom" type="text" maxlength="6" placeholder="NVDA…"
+      value="${!["QQQ","SPY","IWM"].includes(S.ticker)?S.ticker:""}"
+      onkeydown="if(event.key==='Enter')setTicker(this.value)"
+      title="Enter any equity ticker (e.g. NVDA, MSFT, AAPL)"/>
+    <button class="ticker-go" onclick="setTicker(document.getElementById('ticker-custom').value)">GO</button>
+    ${!["QQQ","SPY","IWM"].includes(S.ticker)?`<span style="font-size:8px;color:#333;margin-left:4px">${S.ticker} → no futures conversion</span>`:""}
   </div>
 
   ${!mkt.open?`<div class="bnr bnr-closed">
@@ -811,7 +848,7 @@ function render(){
     <button class="rfbtn" onclick="fetchData()" ${loading?"disabled":""}>
       ${loading?"REFRESHING...":"↻ REFRESH NOW"}
     </button>
-    <div class="albl">AUTO-REFRESH 15s · MARKET HOURS ONLY</div>
+    <div class="albl">AUTO-REFRESH 3s · MARKET HOURS ONLY</div>
   </div>
 
   <div class="legend">
@@ -851,9 +888,30 @@ async function fetchEOD(){
 function setExp(e){S.selExp=e;fetchData();}
 function setSort(greek,v){S.volSort[greek]=v;render();}
 function setAnim(key,val){S[key]=val;render();}
-function setMult(v){if(v&&v>30&&v<60){S.mult=v;S.nqSpot=S.spot?S.spot*v:null;render();}}
+function setMult(v){if(v&&v>0.1&&v<10000){S.mult=v;S.nqSpot=S.spot?S.spot*v:null;render();}}
 function setTlChart(t){S.tlChartType=t;renderTimeline();}
 function setTlOffset(v){S.tlOffset=parseInt(v)||0;renderTimeline();}
+
+// Switch ticker — resets session state and refetches
+function setTicker(sym){
+  sym=sym.toUpperCase().trim();
+  if(!sym)return;
+  S.ticker=sym;
+  const meta=getLocalMeta(sym);
+  S.futuresLabel=meta.futuresLabel;
+  // Reset mult to ticker's approximate value so display isn't stale
+  S.mult=meta.multApprox;
+  S.nqSpot=null;
+  // Reset strikes and timeline for new ticker
+  S.strikes=[];S.flip=null;S.regime=null;
+  S.gexOI=0;S.gexVol=0;S.dexOI=0;S.dexVol=0;
+  S.vannaOI=0;S.vannaVol=0;S.charmOI=0;S.charmVol=0;
+  S.timeline=[];S.selExp="all";S.exps=[];
+  S.callOIWall=null;S.putOIWall=null;S.callVolWall=null;S.putVolWall=null;
+  // Update page title
+  document.title=`${sym} · Options Exposure Tracker`;
+  fetchData();
+}
 
 // Save snapshot to KV session store
 async function saveSnapshot(){
@@ -1036,7 +1094,7 @@ function timelineSectionHTML(){
 fetchEOD();
 loadSession();
 fetchData();
-setInterval(fetchData,15000);
+setInterval(fetchData,3000);
 setInterval(fetchEOD,300000);
 setInterval(()=>{S.mkt=mktStatus();render();},30000);
 </script>
