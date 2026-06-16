@@ -271,6 +271,8 @@ function getLocalMeta(sym){return TICKER_META[sym]||{futuresLabel:null,multAppro
 const S={
   ticker:"QQQ",
   futuresLabel:"NQ/MNQ",
+  inputFocused:false,   // pause render while user is typing in ticker input
+  atmHalfWidth:0.6,     // dynamic — recalculated from strike spacing after each fetch
   spot:null,nqSpot:null,mult:40.5,
   strikes:[],flip:null,regime:null,
   gexOI:0,gexVol:0,dexOI:0,dexVol:0,
@@ -445,6 +447,13 @@ async function fetchData(){
     S.charmOI=r.charmOI;S.charmVol=r.charmVol;
     S.callOIWall=r.callOIWall;S.putOIWall=r.putOIWall;
     S.callVolWall=r.callVolWall;S.putVolWall=r.putVolWall;
+    // Derive ATM window from actual strike spacing (median gap between adjacent strikes)
+    // QQQ $1 strikes → ~0.6 half-width; MSFT $2.5/$5 strikes → ~1.5/3 half-width
+    if(r.rows.length>=2){
+      const gaps=r.rows.slice(1).map((s,i)=>s.strike-r.rows[i].strike).filter(g=>g>0);
+      const medGap=gaps.sort((a,b)=>a-b)[Math.floor(gaps.length/2)]||1;
+      S.atmHalfWidth=medGap*0.6;
+    }
     if(S.flip)S.regime=S.spot<S.flip?"NEGATIVE":"POSITIVE";
     else S.regime=S.gexOI<0?"NEGATIVE":"POSITIVE";
     S.updated=new Date();
@@ -470,8 +479,9 @@ function zoneClass(val,maxAbs){
 
 function getTags(s){
   let t="";
-  if(S.spot&&Math.abs(s.strike-S.spot)<0.5)t+=`<span class="tag t-atm">ATM</span>`;
-  if(S.flip&&Math.abs(s.strike-S.flip)<0.75)t+=`<span class="tag t-flip">FLIP</span>`;
+  const aw=S.atmHalfWidth||0.6;
+  if(S.spot&&Math.abs(s.strike-S.spot)<aw)t+=`<span class="tag t-atm">ATM</span>`;
+  if(S.flip&&Math.abs(s.strike-S.flip)<aw)t+=`<span class="tag t-flip">FLIP</span>`;
   if(S.callOIWall&&s.strike===S.callOIWall.strike)t+=`<span class="tag t-cw">C·OI</span>`;
   if(S.putOIWall&&s.strike===S.putOIWall.strike)t+=`<span class="tag t-pw">P·OI</span>`;
   if(S.callVolWall&&s.strike===S.callVolWall.strike)t+=`<span class="tag t-cv">C·VOL</span>`;
@@ -480,8 +490,9 @@ function getTags(s){
 }
 
 function rowBorder(s){
-  if(S.spot&&Math.abs(s.strike-S.spot)<0.5)return"border-left-color:rgba(255,220,0,0.45)";
-  if(S.flip&&Math.abs(s.strike-S.flip)<0.75)return"border-left-color:rgba(136,136,255,0.45)";
+  const aw=S.atmHalfWidth||0.6;
+  if(S.spot&&Math.abs(s.strike-S.spot)<aw)return"border-left-color:rgba(255,220,0,0.45)";
+  if(S.flip&&Math.abs(s.strike-S.flip)<aw)return"border-left-color:rgba(136,136,255,0.45)";
   if(S.callOIWall&&s.strike===S.callOIWall.strike)return"border-left-color:rgba(255,61,61,0.55)";
   if(S.putOIWall&&s.strike===S.putOIWall.strike)return"border-left-color:rgba(0,221,119,0.55)";
   return"";
@@ -726,9 +737,11 @@ function render(){
     <div class="ticker-sep"></div>
     <input class="ticker-input" id="ticker-custom" type="text" maxlength="6" placeholder="NVDA…"
       value="${!["QQQ","SPY","IWM"].includes(S.ticker)?S.ticker:""}"
-      onkeydown="if(event.key==='Enter')setTicker(this.value)"
+      onfocus="S.inputFocused=true"
+      onblur="S.inputFocused=false"
+      onkeydown="if(event.key==='Enter'){S.inputFocused=false;setTicker(this.value);}"
       title="Enter any equity ticker (e.g. NVDA, MSFT, AAPL)"/>
-    <button class="ticker-go" onclick="setTicker(document.getElementById('ticker-custom').value)">GO</button>
+    <button class="ticker-go" onclick="S.inputFocused=false;setTicker(document.getElementById('ticker-custom').value)">GO</button>
     ${!["QQQ","SPY","IWM"].includes(S.ticker)?`<span style="font-size:8px;color:#333;margin-left:4px">${S.ticker} → no futures conversion</span>`:""}
   </div>
 
@@ -1094,9 +1107,9 @@ function timelineSectionHTML(){
 fetchEOD();
 loadSession();
 fetchData();
-setInterval(fetchData,3000);
+setInterval(()=>{if(!S.inputFocused)fetchData();},3000);
 setInterval(fetchEOD,300000);
-setInterval(()=>{S.mkt=mktStatus();render();},30000);
+setInterval(()=>{S.mkt=mktStatus();if(!S.inputFocused)render();},30000);
 </script>
 </body>
 </html>
