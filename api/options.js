@@ -1,6 +1,6 @@
 const TRADIER_TOKEN = process.env.TRADIER_API_KEY || "SJ5hgXkjhlB1ZCllayTT64iAU44o";
 const BASE = "https://api.tradier.com/v1";
-const CACHE_TTL = 13000; // 13 seconds — slightly under 15s refresh interval
+const CACHE_TTL = 3000; // 3 seconds — matches Vercel Pro refresh interval
 
 const HEADERS = {
   "Authorization": `Bearer ${TRADIER_TOKEN}`,
@@ -8,7 +8,6 @@ const HEADERS = {
 };
 
 // In-memory cache — shared across all requests on same Vercel instance
-// Prevents multiple indicator instances from hammering Tradier simultaneously
 const _cache = {};
 
 function getCached(key) {
@@ -29,17 +28,33 @@ async function fetchJSON(url) {
   catch (e) { throw new Error(`Bad JSON: ${text.slice(0, 200)}`); }
 }
 
+// Futures metadata per underlying ETF
+// futuresSymbols: ordered list to try for live futures price
+// multApprox: fallback multiplier if futures price unavailable
+// futuresLabel: display label (e.g. "NQ/MNQ", "ES/MES")
+const TICKER_META = {
+  QQQ: { futuresSymbols: ["/NQ", "NQ", "NQM25", "NQU25", "NQZ25"], multApprox: 40.5, futuresLabel: "NQ/MNQ" },
+  SPY: { futuresSymbols: ["/ES", "ES", "ESM25", "ESU25", "ESZ25"], multApprox: 10.0, futuresLabel: "ES/MES" },
+  IWM: { futuresSymbols: ["/RTY", "RTY", "RTYM25", "RTYU25", "RTYZ25"], multApprox: 10.0, futuresLabel: "RTY/M2K" },
+};
+
+// For equity tickers (NVDA, MSFT, etc.) — no futures conversion, mult = 1
+function getTickerMeta(symbol) {
+  const upper = symbol.toUpperCase();
+  return TICKER_META[upper] || { futuresSymbols: [], multApprox: 1.0, futuresLabel: null };
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET");
   res.setHeader("Cache-Control", "no-store");
 
   try {
+    // symbol defaults to QQQ for backward compatibility
+    const symbol = (req.query.symbol || "QQQ").toUpperCase();
     const { exp } = req.query;
-    const cacheKey = `options_${exp || "all"}`;
+    const cacheKey = `options_${symbol}_${exp || "all"}`;
 
-    // Return cached response if fresh — serves all 6 indicator instances
-    // from a single Tradier call, staying well within rate limits
     const cached = getCached(cacheKey);
     if (cached) {
       res.setHeader("X-Cache", "HIT");
@@ -47,24 +62,25 @@ export default async function handler(req, res) {
     }
     res.setHeader("X-Cache", "MISS");
 
-    // QQQ spot price
-    const quoteData = await fetchJSON(`${BASE}/markets/quotes?symbols=QQQ&greeks=false`);
-    const spot = quoteData?.quotes?.quote?.last ?? null;
-    if (!spot) throw new Error("No QQQ spot price — check token or market hours");
+    const meta = getTickerMeta(symbol);
 
-    // Get expirations
+    // Spot price for the requested ETF/equity
+    const quoteData = await fetchJSON(`${BASE}/markets/quotes?symbols=${symbol}&greeks=false`);
+    const spot = quoteData?.quotes?.quote?.last ?? null;
+    if (!spot) throw new Error(`No spot price for ${symbol} — check token or market hours`);
+
+    // Expirations
     const expData = await fetchJSON(
-      `${BASE}/markets/options/expirations?symbol=QQQ&includeAllRoots=false&strikes=false`
+      `${BASE}/markets/options/expirations?symbol=${symbol}&includeAllRoots=false&strikes=false`
     );
     const allExps = expData?.expirations?.date || [];
-    if (!allExps.length) throw new Error("No expirations returned");
+    if (!allExps.length) throw new Error(`No expirations returned for ${symbol}`);
 
-    // Fetch nearest 4 expirations or specific one
+    // Fetch nearest 4 expirations or a specific one
     const expsToFetch = (exp && exp !== "all") ? [exp] : allExps.slice(0, 4);
 
-    // Fetch chains in parallel
     const chainPromises = expsToFetch.map(e =>
-      fetchJSON(`${BASE}/markets/options/chains?symbol=QQQ&expiration=${e}&greeks=true`)
+      fetchJSON(`${BASE}/markets/options/chains?symbol=${symbol}&expiration=${e}&greeks=true`)
         .then(d => ({ exp: e, options: d?.options?.option || [] }))
         .catch(err => ({ exp: e, options: [], error: err.message }))
     );
@@ -96,7 +112,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // Build per-strike callOI/putOI map for PCR calculation
+    // Per-strike OI map for PCR
     const strikeOIMap = {};
     for (const c of contracts) {
       const strike = c.details.strike_price;
@@ -106,8 +122,6 @@ export default async function handler(req, res) {
       if (type === "call") strikeOIMap[strike].callOI += oi;
       else strikeOIMap[strike].putOI += oi;
     }
-
-    // Attach PCR to each contract's details
     for (const c of contracts) {
       const m = strikeOIMap[c.details.strike_price];
       c.details.callOI = m?.callOI ?? 0;
@@ -116,45 +130,57 @@ export default async function handler(req, res) {
     }
 
     if (contracts.length === 0) {
-      throw new Error("Options chain returned 0 contracts. Market may be closed or token invalid.");
+      throw new Error(`Options chain returned 0 contracts for ${symbol}. Market may be closed or token invalid.`);
     }
 
-    // NQ futures price — try Tradier futures symbols
-    // Note: Tradier may not carry NQ futures. If unavailable, mult will be
-    // calculated from the last known good value or manual override.
-    let nqPrice = null;
-    for (const sym of ["/NQ", "NQ", "NQM25", "NQU25"]) {
-      try {
-        const d = await fetchJSON(`${BASE}/markets/quotes?symbols=${encodeURIComponent(sym)}&greeks=false`);
-        const p = d?.quotes?.quote?.last ?? null;
-        if (p && p > 1000) { nqPrice = p; break; }
-      } catch (_) {}
+    // Futures price — only attempted for known ETF underlyings
+    let futuresPrice = null;
+    if (meta.futuresSymbols.length > 0) {
+      for (const sym of meta.futuresSymbols) {
+        try {
+          const d = await fetchJSON(`${BASE}/markets/quotes?symbols=${encodeURIComponent(sym)}&greeks=false`);
+          const p = d?.quotes?.quote?.last ?? null;
+          if (p && p > 100) { futuresPrice = p; break; }
+        } catch (_) {}
+      }
     }
 
-    // Do NOT use NDX as NQ proxy — NDX is the cash index, NQ futures trade at a premium
-    // If nqPrice is null, frontend will use its last known multiplier
-
-    // Calculate mult only if we have a real NQ futures price
-    const mult = (nqPrice && nqPrice > 1000 && spot) ? nqPrice / spot : null;
+    // Multiplier logic:
+    // - If we got a live futures price, use it
+    // - If equity (mult=1), just return 1
+    // - Otherwise fall back to approx
+    let mult = null;
+    if (meta.multApprox === 1.0) {
+      // Direct equity — no conversion
+      mult = 1.0;
+    } else if (futuresPrice && futuresPrice > 100 && spot) {
+      mult = futuresPrice / spot;
+    } else {
+      // No live futures — return null so frontend preserves its last known value
+      mult = null;
+    }
 
     const responseData = {
+      symbol,
       spot,
-      nqPrice,
+      futuresPrice,
       mult,
+      futuresLabel: meta.futuresLabel,  // "NQ/MNQ", "ES/MES", "RTY/M2K", or null for equities
       contracts,
       expirations: allExps.slice(0, 8),
       debug: {
+        symbol,
         contractCount: contracts.length,
         expsLoaded: expsToFetch,
         hasGreeks: contracts[0]?.greeks?.gamma != null,
         sampleStrike: contracts[0]?.details?.strike_price ?? null,
-        spotQQQ: spot,
-        nqFutures: nqPrice,
+        spotPrice: spot,
+        futuresPrice,
         mult,
+        futuresLabel: meta.futuresLabel,
       }
     };
 
-    // Cache for next requests from other indicator instances
     setCache(cacheKey, responseData);
     res.status(200).json(responseData);
 
