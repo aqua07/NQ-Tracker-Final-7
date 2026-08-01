@@ -113,6 +113,9 @@ html,body{background:var(--bg);color:var(--text);font-family:var(--mono);min-hei
 /* Diverging bar — center zero */
 .dbw{position:relative;height:20px;display:flex;align-items:center;}
 .dzero{position:absolute;left:50%;width:1px;height:100%;background:rgba(255,255,255,0.07);z-index:1;}
+/* Vol diverging bar — same layout as OI but thinner */
+.vdbw{position:relative;height:14px;display:flex;align-items:center;margin:1px 0;}
+.vdzero{position:absolute;left:50%;width:1px;height:100%;background:rgba(255,255,255,0.07);z-index:1;}
 .dp{position:absolute;left:50%;height:11px;border-radius:0 2px 2px 0;transition:width .35s;}
 .dn{position:absolute;height:11px;border-radius:2px 0 0 2px;transition:width .35s;right:50%;}
 .dvp{position:absolute;left:50%;height:5px;border-radius:0 1px 1px 0;bottom:1px;transition:width .35s;}
@@ -513,11 +516,15 @@ function divBar(val,vVal,maxA,maxV,posCol,negCol,vPosCol,vNegCol){
   return`<div class="dbw"><div class="dzero"></div>${mainBar}${volBar}</div><div class="bval" style="color:${vc}">${pos?"+":""}${fmt(val)}</div>`;
 }
 
-function greekSection(label,color,netOI,netVol,fOI,fVol,posCol,negCol,vPosCol,vNegCol){
+function greekSection(label,color,netOI,netVol,fOI,fVol,posCol,negCol,vPosCol,vNegCol,fCallVol,fPutVol){
   const rows=S.strikes;
   if(!rows.length)return"";
   const maxA=Math.max(...rows.map(s=>Math.abs(s[fOI])),1);
   const maxV=Math.max(...rows.map(s=>Math.abs(s[fVol])),1);
+  // For diverging vol chart: max is the largest single-side value
+  const maxVC=Math.max(...rows.map(s=>Math.abs(s[fCallVol]||0)),1);
+  const maxVP=Math.max(...rows.map(s=>Math.abs(s[fPutVol]||0)),1);
+  const maxVDiv=Math.max(maxVC,maxVP,1);
   const sym=label==="GEX"?"γ":label==="DEX"?"Δ":label==="VANNA"?"ν":"χ";
   const sort=S.volSort[label]||"strike";
   const netColor=netOI>=0?posCol:negCol;
@@ -533,18 +540,31 @@ function greekSection(label,color,netOI,netVol,fOI,fVol,posCol,negCol,vPosCol,vN
     </div>`;
   }).join("");
 
-  // Vol chart — sortable
-  let volRows=[...rows].filter(s=>s[fVol]!==0);
+  // Vol chart — diverging (calls right, puts left), sortable by net magnitude or strike
+  let volRows=[...rows].filter(s=>(s[fCallVol]||0)!==0||(s[fPutVol]||0)!==0);
   if(sort==="mag") volRows.sort((a,b)=>Math.abs(b[fVol])-Math.abs(a[fVol]));
-  else volRows.reverse(); // strike descending
+  else volRows.reverse();
   volRows=volRows.slice(0,22);
   const volHTML=volRows.map(s=>{
-    const vv=s[fVol],bw=Math.min((Math.abs(vv)/maxV*100),100).toFixed(1),pos=vv>=0;
-    const bg=pos?vPosCol:vNegCol,vc=pos?posCol:negCol;
+    const cv=s[fCallVol]||0;   // call vol — always positive, goes RIGHT
+    const pv=s[fPutVol]||0;    // put vol  — always negative (stored as neg), goes LEFT
+    const callW=Math.min((Math.abs(cv)/maxVDiv*50),50).toFixed(1);
+    const putW =Math.min((Math.abs(pv)/maxVDiv*50),50).toFixed(1);
+    const netV=s[fVol];
+    const netPos=netV>=0;
+    const vc=netPos?posCol:negCol;
+    // Call bar: anchored at center, extends right
+    const callBar=`<div style="width:${callW}%;height:10px;background:${vPosCol};flex-shrink:0"></div>`;
+    // Put bar: anchored at center, extends left (row-reverse on left half)
+    const putBar=`<div style="width:${putW}%;height:10px;background:${vNegCol};flex-shrink:0"></div>`;
     return`<div class="vrow">
       <div class="slbl">${getTags(s)}$${s.strike.toFixed(0)}</div>
-      <div class="vbw"><div class="vb" style="width:${bw}%;background:${bg}"></div></div>
-      <div class="bval" style="color:${vc}">${pos?"+":""}${fmt(vv)}</div>
+      <div class="vdbw" style="flex:1;display:flex;align-items:center;">
+        <div class="vdzero"></div>
+        <div style="width:50%;display:flex;justify-content:flex-end;overflow:hidden;">${putBar}</div>
+        <div style="width:50%;display:flex;justify-content:flex-start;overflow:hidden;">${callBar}</div>
+      </div>
+      <div class="bval" style="color:${vc}">${netPos?"+":""}${fmt(netV)}</div>
     </div>`;
   }).join("");
 
@@ -573,13 +593,18 @@ function greekSection(label,color,netOI,netVol,fOI,fVol,posCol,negCol,vPosCol,vN
       </div>
       <div class="cpanel">
         <div class="ctitle">
-          <span>${label} — VOLUME-WEIGHTED</span>
+          <span>${label} — VOLUME-WEIGHTED (DIVERGING)</span>
           <span class="sort-grp">
             <button class="sbtn ${sort==="strike"?"on":""}" onclick="setSort('${label}','strike')">Strike</button>
             <button class="sbtn ${sort==="mag"?"on":""}" onclick="setSort('${label}','mag')">Size</button>
           </span>
         </div>
         <div class="cscroll ${volAnimClass}" id="sc-vol-${label}">${volHTML}</div>
+        <div class="cleg">
+          <span>▬ Puts diverge left</span>
+          <span>▬ Calls diverge right</span>
+          <span style="color:#443300">▬ ATM</span>
+        </div>
       </div>
     </div>
   </div>`;
@@ -842,16 +867,16 @@ function render(){
 
   ${strikes.length>0?`
     <div class="sec-div">── GAMMA EXPOSURE (GEX) ─────────────────────</div>
-    ${greekSection("GEX","var(--green)",gexOI,gexVol,"netGex","netVGex","#2d9e6b","#c94040","rgba(45,158,107,0.28)","rgba(201,64,64,0.28)")}
+    ${greekSection("GEX","var(--green)",gexOI,gexVol,"netGex","netVGex","#2d9e6b","#c94040","rgba(45,158,107,0.28)","rgba(201,64,64,0.28)","callVGex","putVGex")}
 
     <div class="sec-div">── DELTA EXPOSURE (DEX) ─────────────────────</div>
-    ${greekSection("DEX","var(--blue)",dexOI,dexVol,"netDex","netVDex","#4499ff","#ff4488","rgba(68,153,255,0.25)","rgba(255,68,136,0.25)")}
+    ${greekSection("DEX","var(--blue)",dexOI,dexVol,"netDex","netVDex","#4499ff","#ff4488","rgba(68,153,255,0.25)","rgba(255,68,136,0.25)","callVDex","putVDex")}
 
     <div class="sec-div">── VANNA EXPOSURE ───────────────────────────</div>
-    ${greekSection("VANNA","var(--vanna)",vannaOI,vannaVol,"netVanna","netVVanna","#ff9944","#cc5500","rgba(255,153,68,0.25)","rgba(204,85,0,0.25)")}
+    ${greekSection("VANNA","var(--vanna)",vannaOI,vannaVol,"netVanna","netVVanna","#ff9944","#cc5500","rgba(255,153,68,0.25)","rgba(204,85,0,0.25)","callVVanna","putVVanna")}
 
     <div class="sec-div">── CHARM EXPOSURE ───────────────────────────</div>
-    ${greekSection("CHARM","var(--charm)",charmOI,charmVol,"netCharm","netVCharm","#bb44ff","#7700cc","rgba(187,68,255,0.25)","rgba(119,0,204,0.25)")}
+    ${greekSection("CHARM","var(--charm)",charmOI,charmVol,"netCharm","netVCharm","#bb44ff","#7700cc","rgba(187,68,255,0.25)","rgba(119,0,204,0.25)","callVCharm","putVCharm")}
 
     ${dteSectionHTML()}
     ${timelineSectionHTML()}
