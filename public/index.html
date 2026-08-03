@@ -156,6 +156,7 @@ html,body{background:var(--bg);color:var(--text);font-family:var(--mono);min-hei
 .ticker-go{background:transparent;border:1px solid #1a1a22;color:#444;border-radius:3px;padding:4px 10px;font-size:9px;letter-spacing:1px;cursor:pointer;font-family:var(--mono);}
 .ticker-go:hover{border-color:#333;color:#888;}
 .ticker-label{font-size:8px;color:#252528;letter-spacing:3px;margin-right:4px;}
+.vrow-atm{border-left:2px solid rgba(255,220,0,0.35)!important;}
 .ltitle{font-size:7px;color:#2a2a2a;letter-spacing:2px;margin-bottom:8px;}
 .lgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:2px;}
 .lrow{font-size:8px;color:#383838;line-height:2.2;}
@@ -534,30 +535,31 @@ function greekSection(label,color,netOI,netVol,fOI,fVol,posCol,negCol,vPosCol,vN
   const oiRows=[...rows].reverse().map(s=>{
     const val=s[fOI],vVal=s[fVol];
     const zone=zoneClass(val,maxA);
-    return`<div class="srow ${zone}" style="${rowBorder(s)}">
+    const isAtm=S.spot&&Math.abs(s.strike-S.spot)<(S.atmHalfWidth||0.6);
+    return`<div class="srow ${zone}" style="${rowBorder(s)}" data-atm="${isAtm?1:0}">
       <div class="slbl">${getTags(s)}$${s.strike.toFixed(0)}</div>
       ${divBar(val,vVal,maxA,maxV,posCol,negCol,vPosCol,vNegCol)}
     </div>`;
   }).join("");
 
   // Vol chart — diverging (calls right, puts left), sortable by net magnitude or strike
+  // No slice cap — show all strikes so ATM is always reachable by scroll
   let volRows=[...rows].filter(s=>(s[fCallVol]||0)!==0||(s[fPutVol]||0)!==0);
   if(sort==="mag") volRows.sort((a,b)=>Math.abs(b[fVol])-Math.abs(a[fVol]));
-  else volRows.reverse();
-  volRows=volRows.slice(0,22);
+  else volRows.reverse(); // strike descending
+  // When sorted by strike, always include full range so ATM is reachable
   const volHTML=volRows.map(s=>{
-    const cv=s[fCallVol]||0;   // call vol — always positive, goes RIGHT
-    const pv=s[fPutVol]||0;    // put vol  — always negative (stored as neg), goes LEFT
+    const cv=s[fCallVol]||0;
+    const pv=s[fPutVol]||0;
     const callW=Math.min((Math.abs(cv)/maxVDiv*50),50).toFixed(1);
     const putW =Math.min((Math.abs(pv)/maxVDiv*50),50).toFixed(1);
     const netV=s[fVol];
     const netPos=netV>=0;
     const vc=netPos?posCol:negCol;
-    // Call bar: anchored at center, extends right
+    const isAtm=S.spot&&Math.abs(s.strike-S.spot)<(S.atmHalfWidth||0.6);
     const callBar=`<div style="width:${callW}%;height:10px;background:${vPosCol};flex-shrink:0"></div>`;
-    // Put bar: anchored at center, extends left (row-reverse on left half)
     const putBar=`<div style="width:${putW}%;height:10px;background:${vNegCol};flex-shrink:0"></div>`;
-    return`<div class="vrow">
+    return`<div class="vrow${isAtm?" vrow-atm":""}" data-atm="${isAtm?1:0}">
       <div class="slbl">${getTags(s)}$${s.strike.toFixed(0)}</div>
       <div class="vdbw" style="flex:1;display:flex;align-items:center;">
         <div class="vdzero"></div>
@@ -580,7 +582,10 @@ function greekSection(label,color,netOI,netVol,fOI,fVol,posCol,negCol,vPosCol,vN
     </div>
     <div class="charts">
       <div class="cpanel">
-        <div class="ctitle">${label} BY STRIKE — OI-WEIGHTED (DIVERGING)</div>
+        <div class="ctitle" style="display:flex;justify-content:space-between;align-items:center;">
+          <span>${label} BY STRIKE — OI-WEIGHTED (DIVERGING)</span>
+          <button class="sbtn" onclick="scrollToAtm('sc-oi-${label}')" title="Center on ATM strike">ATM ⌖</button>
+        </div>
         <div class="cscroll ${oiAnimClass}" id="sc-oi-${label}">${oiRows}</div>
         <div class="cleg">
           <span>▬ OI bars diverge from center</span>
@@ -597,6 +602,7 @@ function greekSection(label,color,netOI,netVol,fOI,fVol,posCol,negCol,vPosCol,vN
           <span class="sort-grp">
             <button class="sbtn ${sort==="strike"?"on":""}" onclick="setSort('${label}','strike')">Strike</button>
             <button class="sbtn ${sort==="mag"?"on":""}" onclick="setSort('${label}','mag')">Size</button>
+            <button class="sbtn" onclick="scrollToAtm('sc-vol-${label}')" title="Center on ATM strike">ATM ⌖</button>
           </span>
         </div>
         <div class="cscroll ${volAnimClass}" id="sc-vol-${label}">${volHTML}</div>
@@ -929,6 +935,28 @@ function setAnim(key,val){S[key]=val;render();}
 function setMult(v){if(v&&v>0.1&&v<10000){S.mult=v;S.nqSpot=S.spot?S.spot*v:null;render();}}
 function setTlChart(t){S.tlChartType=t;renderTimeline();}
 function setTlOffset(v){S.tlOffset=parseInt(v)||0;renderTimeline();}
+
+// Scroll the given scroll container so its ATM row is vertically centered
+function scrollToAtm(panelId){
+  const container=document.getElementById(panelId);
+  if(!container)return;
+  // OI panel uses data-atm on .srow; vol panel uses data-atm on .vrow
+  const atmRow=container.querySelector('[data-atm="1"]');
+  if(!atmRow){
+    // Fallback: find row whose label contains ATM tag
+    const tags=container.querySelectorAll('.tag.t-atm');
+    if(tags.length>0){
+      const row=tags[0].closest('.srow,.vrow');
+      if(row){
+        const rowMid=row.offsetTop+row.offsetHeight/2;
+        container.scrollTop=rowMid-container.clientHeight/2;
+      }
+    }
+    return;
+  }
+  const rowMid=atmRow.offsetTop+atmRow.offsetHeight/2;
+  container.scrollTop=rowMid-container.clientHeight/2;
+}
 
 // Switch ticker — resets session state and refetches
 function setTicker(sym){
