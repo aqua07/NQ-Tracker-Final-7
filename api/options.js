@@ -1,4 +1,4 @@
-const TRADIER_TOKEN = process.env.TRADIER_API_KEY || "SJ5hgXkjhlB1ZCllayTT64iAU44o";
+const TRADIER_TOKEN = process.env.TRADIER_API_KEY;   // set in Vercel env vars; never hardcode
 const BASE = "https://api.tradier.com/v1";
 const CACHE_TTL = 3000; // 3 seconds — matches Vercel Pro refresh interval
 
@@ -66,7 +66,11 @@ export default async function handler(req, res) {
 
     // Spot price for the requested ETF/equity
     const quoteData = await fetchJSON(`${BASE}/markets/quotes?symbols=${symbol}&greeks=false`);
-    const spot = quoteData?.quotes?.quote?.last ?? null;
+    const q0 = quoteData?.quotes?.quote ?? {};
+    const spot = q0.last ?? null;
+    // Official regular-session close (excludes after-hours prints). Tradier fills
+    // "close" after 16:00; before the next open it may be null, so fall back to prevclose.
+    const rthClose = (q0.close > 0 ? q0.close : null) ?? (q0.prevclose > 0 ? q0.prevclose : null);
     if (!spot) throw new Error(`No spot price for ${symbol} — check token or market hours`);
 
     // Expirations
@@ -163,6 +167,7 @@ export default async function handler(req, res) {
     const responseData = {
       symbol,
       spot,
+      rthClose,
       futuresPrice,
       mult,
       futuresLabel: meta.futuresLabel,  // "NQ/MNQ", "ES/MES", "RTY/M2K", or null for equities
