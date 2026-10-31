@@ -2,8 +2,8 @@
 // Saves and retrieves full session timeline data via Upstash Redis
 // Uses GU_ prefix env vars set up by Upstash integration
 
-const KV_URL   = process.env.GU_KV_REST_API_URL;
-const KV_TOKEN = process.env.GU_KV_REST_API_TOKEN;
+const KV_URL   = process.env.GU_KV_REST_API_URL   || process.env.KV_REST_API_URL;
+const KV_TOKEN = process.env.GU_KV_REST_API_TOKEN || process.env.KV_REST_API_TOKEN;
 
 async function kvGet(key) {
   if (!KV_URL || !KV_TOKEN) return null;
