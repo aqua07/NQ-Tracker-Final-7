@@ -2,7 +2,7 @@
 // Returns the last saved EOD snapshot
 // Falls back to computing live if no snapshot exists
 
-const TRADIER_TOKEN = process.env.TRADIER_API_KEY || "SJ5hgXkjhlB1ZCllayTT64iAU44o";
+const TRADIER_TOKEN = process.env.TRADIER_API_KEY;   // set in Vercel env vars; never hardcode
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
