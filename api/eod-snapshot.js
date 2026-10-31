@@ -2,7 +2,7 @@
 // Called by Vercel Cron at 4:05 PM ET (21:05 UTC) on weekdays
 // Calculates OI-based gamma walls and saves them to KV store
 
-const TRADIER_TOKEN = process.env.TRADIER_API_KEY || "SJ5hgXkjhlB1ZCllayTT64iAU44o";
+const TRADIER_TOKEN = process.env.TRADIER_API_KEY;   // set in Vercel env vars; never hardcode
 const BASE = "https://api.tradier.com/v1";
 const HEADERS = {
   "Authorization": `Bearer ${TRADIER_TOKEN}`,
@@ -110,7 +110,19 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
 
-  // Allow manual trigger via GET, cron via GET as well
+  // Cron calls run twice (DST / standard time); only the one landing 16:00-16:30 ET captures.
+  // Manual GETs always run.
+  const isCron = /vercel-cron/i.test(req.headers?.["user-agent"] || "");
+  if (isCron) {
+    const now = new Date();
+    const hm = now.toLocaleTimeString("en-GB", { timeZone: "America/New_York", hour12: false }).slice(0, 5);
+    const d = now.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+    const dow = new Date(d + "T12:00:00Z").getUTCDay();
+    if (dow === 0 || dow === 6 || hm < "16:00" || hm >= "16:30") {
+      return res.status(200).json({ skipped: true, reason: `outside capture window (${hm} ET)` });
+    }
+  }
+
   try {
     // Fetch spot
     const quoteData = await fetchJSON(`${BASE}/markets/quotes?symbols=QQQ&greeks=false`);
