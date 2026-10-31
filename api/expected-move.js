@@ -20,8 +20,16 @@
 
 const TRADIER_TOKEN = process.env.TRADIER_API_KEY;   // no fallback: set it in Vercel
 const BASE = "https://api.tradier.com/v1";
-const KV_URL = process.env.GU_KV_REST_API_URL;
-const KV_TOKEN = process.env.GU_KV_REST_API_TOKEN;
+// Upstash credentials: first name pair that exists wins (integration prefixes vary)
+const KV_PAIRS = [
+  ["GU_KV_REST_API_URL", "GU_KV_REST_API_TOKEN"],
+  ["GU_UPSTASH_REDIS_REST_URL", "GU_UPSTASH_REDIS_REST_TOKEN"],
+  ["KV_REST_API_URL", "KV_REST_API_TOKEN"],
+  ["UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"],
+];
+const KV_FOUND = KV_PAIRS.find(([u, t]) => process.env[u] && process.env[t]) || null;
+const KV_URL = KV_FOUND ? process.env[KV_FOUND[0]] : null;
+const KV_TOKEN = KV_FOUND ? process.env[KV_FOUND[1]] : null;
 const CACHE_TTL = 60 * 1000;
 const SNAP_TTL = 60 * 60 * 24 * 21;   // keep snapshots 3 weeks
 
@@ -171,6 +179,9 @@ export default async function handler(req, res) {
       expiration: live.expiration,
       is0DTE: live.expiration === today,
       kvConfigured: Boolean(KV_URL && KV_TOKEN),
+      kvVars: KV_FOUND ? KV_FOUND[0] : "none found (checked: " + KV_PAIRS.map(p => p[0]).join(", ") + ")",
+      // names only, never values: helps spot a mis-named variable
+      kvLikeVarNames: Object.keys(process.env).filter(k => /KV|UPSTASH|REDIS/i.test(k)).sort(),
       asOf: new Date().toISOString(),
     };
 
