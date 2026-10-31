@@ -7,6 +7,8 @@
     { "path": "/api/expected-move?symbol=QQQ&capture=1", "schedule": "31 13 * * 1-5" },
     { "path": "/api/expected-move?symbol=QQQ&capture=1", "schedule": "31 14 * * 1-5" },
     { "path": "/api/expected-move?symbol=QQQ&capture=1", "schedule": "20 20 * * 1-5" },
-    { "path": "/api/expected-move?symbol=QQQ&capture=1", "schedule": "20 21 * * 1-5" }
+    { "path": "/api/expected-move?symbol=QQQ&capture=1", "schedule": "20 21 * * 1-5" },
+    { "path": "/api/eod-snapshot", "schedule": "5 20 * * 1-5" },
+    { "path": "/api/eod-snapshot", "schedule": "5 21 * * 1-5" }
   ]
 }
